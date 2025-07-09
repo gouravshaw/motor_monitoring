@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Motor Health Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000000;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #00ff88;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+            color: #cccccc;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .control-panel h3 {
+            color: #00ff88;
+            margin-bottom: 15px;
+        }
+
+        .control-button {
+            padding: 12px 24px;
+            margin: 8px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1em;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-emergency { 
+            background: linear-gradient(45deg, #ff4444, #cc0000);
+            color: white; 
+        }
+        
+        .btn-warning { 
+            background: linear-gradient(45deg, #ff9800, #e65100);
+            color: white; 
+        }
+        
+        .btn-normal { 
+            background: linear-gradient(45deg, #4CAF50, #2e7d32);
+            color: white; 
+        }
+
+        .control-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .control-button:active {
+            transform: scale(0.95);
+        }
+
+        .status-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: transform 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: #00ff88;
+            box-shadow: 0 12px 40px rgba(0, 255, 136, 0.2);
+        }
+
+        .card.stale-indicator {
+            opacity: 0.6;
+            border: 2px dashed #ff9800;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 0.8; }
+            100% { opacity: 0.6; }
+        }
+
+        .card-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .card-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #00ff88;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .card-label {
+            font-size: 1.1em;
+            opacity: 0.8;
+            margin-bottom: 10px;
+            color: #cccccc;
+        }
+
+        .card-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .status-normal { background: #4CAF50; color: white; }
+        .status-warm { background: #FF9800; color: white; }
+        .status-high { background: #F44336; color: white; }
+        .status-low { background: #2196F3; color: white; }
+        .status-active { background: #9C27B0; color: white; }
+        .status-stale { 
+            background: #757575; 
+            color: white;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.5; }
+        }
+
+        .charts-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .chart-title {
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #00ff88;
+        }
+
+        .data-table {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .table-title {
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #00ff88;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        th {
+            background: rgba(0, 255, 136, 0.1);
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .connected {
+            background: linear-gradient(45deg, #4CAF50, #2e7d32);
+            color: white;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .disconnected {
+            background: linear-gradient(45deg, #F44336, #c62828);
+            color: white;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 20px rgba(244, 67, 54, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(244, 67, 54, 0.8); }
+            100% { box-shadow: 0 0 20px rgba(244, 67, 54, 0.4); }
+        }
+
+        @media (max-width: 768px) {
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .card-value {
+                font-size: 2em;
+            }
+
+            .control-button {
+                padding: 10px 16px;
+                margin: 4px;
+                font-size: 0.9em;
+            }
+        }
+
+        .last-update {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 1.1em;
+            opacity: 0.8;
+            color: #cccccc;
+        }
+
+        .no-data-message {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .system-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-card div:first-child {
+            color: #00ff88;
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.3);
+        }
+
+        .historical-row {
+            opacity: 0.8;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .command-feedback {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .command-success {
+            background: linear-gradient(45deg, #4CAF50, #2e7d32);
+            color: white;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .command-error {
+            background: linear-gradient(45deg, #F44336, #c62828);
+            color: white;
+            box-shadow: 0 0 20px rgba(244, 67, 54, 0.4);
+        }
+
+        /* Scrollbar styling for dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #00ff88;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00cc66;
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">🔴 Disconnected</div>
+    <div class="command-feedback" id="commandFeedback"></div>
+
+    <div class="header">
+        <h1>🔧 MQTT Motor Health Dashboard</h1>
+        <p>Real-time IoT Motor Monitoring with MQTT Control</p>
+        <p>Student: Gourav Shaw (T0436800) | MSc Cloud Computing</p>
+    </div>
+
+    <div class="container">
+        <!-- MQTT Control Panel -->
+        <div class="control-panel">
+            <h3>🎮 Motor Control Panel (MQTT Commands)</h3>
+            <p style="margin-bottom: 15px; opacity: 0.8; color: #cccccc;">Send real-time commands to ESP32 via MQTT</p>
+            <button class="control-button btn-emergency" onclick="sendCommand('EMERGENCY_STOP')">
+                🛑 Emergency Stop
+            </button>
+            <button class="control-button btn-warning" onclick="sendCommand('SPEED_REDUCE')">
+                🐌 Reduce Speed
+            </button>
+            <button class="control-button btn-normal" onclick="sendCommand('NORMAL_OPERATION')">
+                ✅ Normal Operation
+            </button>
+        </div>
+
+        <!-- System Information -->
+        <div class="system-info" id="systemInfo">
+            <!-- System stats will be populated here -->
+        </div>
+
+        <!-- Status Cards -->
+        <div class="status-cards">
+            <div class="card" id="tempCard">
+                <div class="card-icon">🌡️</div>
+                <div class="card-value" id="tempValue">--</div>
+                <div class="card-label">Temperature (°C)</div>
+                <div class="card-status" id="tempStatus">Loading...</div>
+            </div>
+
+            <div class="card" id="vibCard">
+                <div class="card-icon">🌊</div>
+                <div class="card-value" id="vibValue">--</div>
+                <div class="card-label">Vibration (m/s²)</div>
+                <div class="card-status" id="vibStatus">Loading...</div>
+            </div>
+
+            <div class="card" id="humCard">
+                <div class="card-icon">💧</div>
+                <div class="card-value" id="humValue">--</div>
+                <div class="card-label">Humidity (%)</div>
+                <div class="card-status" id="humStatus">Environmental</div>
+            </div>
+
+            <div class="card" id="pressCard">
+                <div class="card-icon">📊</div>
+                <div class="card-value" id="pressValue">--</div>
+                <div class="card-label">Pressure (hPa)</div>
+                <div class="card-status" id="pressStatus">Atmospheric</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-section">
+            <div class="chart-container">
+                <div class="chart-title">Temperature Trend</div>
+                <canvas id="tempChart" width="400" height="200"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Vibration Pattern</div>
+                <canvas id="vibChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="data-table">
+            <div class="table-title">Recent Readings</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Temperature</th>
+                        <th>Vibration</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                    <tr>
+                        <td colspan="4" style="text-align: center;">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="last-update">
+            Last updated: <span id="lastUpdate">Never</span>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let tempChart, vibChart;
+        let tempData = [];
+        let vibData = [];
+        let timeLabels = [];
+        let isConnected = false;
+        let noDataDisplayed = false;
+
+        // NEW: MQTT Control Function
+        async function sendCommand(command) {
+            try {
+                console.log(`Sending MQTT command: ${command}`);
+                
+                const response = await fetch('/api/control', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ command: command })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showCommandFeedback(`Command "${command}" sent successfully!`, 'success');
+                    console.log('Command sent:', result);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error sending command:', error);
+                showCommandFeedback(`Failed to send command: ${error.message}`, 'error');
+            }
+        }
+
+        // NEW: Show command feedback
+        function showCommandFeedback(message, type) {
+            const feedbackDiv = document.getElementById('commandFeedback');
+            feedbackDiv.textContent = message;
+            feedbackDiv.className = `command-feedback command-${type}`;
+            feedbackDiv.style.display = 'block';
+
+            setTimeout(() => {
+                feedbackDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // Initialize charts with dark theme
+        function initCharts() {
+            // Temperature Chart
+            const tempCtx = document.getElementById('tempChart').getContext('2d');
+            tempChart = new Chart(tempCtx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [{
+                        label: 'Temperature (°C)',
+                        data: tempData,
+                        borderColor: '#00ff88',
+                        backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#00ff88',
+                        pointBorderColor: '#ffffff',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { 
+                            labels: { color: '#ffffff' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)',
+                                color: '#ffffff'
+                            }
+                        },
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                color: '#ffffff'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Vibration Chart
+            const vibCtx = document.getElementById('vibChart').getContext('2d');
+            vibChart = new Chart(vibCtx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [{
+                        label: 'Vibration (m/s²)',
+                        data: vibData,
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#ff6b6b',
+                        pointBorderColor: '#ffffff',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { 
+                            labels: { color: '#ffffff' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: {
+                                display: true,
+                                text: 'Vibration (m/s²)',
+                                color: '#ffffff'
+                            }
+                        },
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                color: '#ffffff'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Fetch latest data from server
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/current');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data && data.temperature !== undefined && data.isConnected) {
+                        updateDashboard(data);
+                        updateConnectionStatus(true);
+                        noDataDisplayed = false;
+                    } else if (data && data.temperature !== undefined && !data.isConnected) {
+                        // Show stale data but mark as disconnected
+                        updateDashboard(data, true); // true = stale data
+                        updateConnectionStatus(false);
+                        console.log(`ESP32 disconnected. Last data: ${data.dataAge} seconds ago`);
+                    } else {
+                        console.log('No data received yet');
+                        updateConnectionStatus(false);
+                        if (!noDataDisplayed) {
+                            showNoDataMessage();
+                            noDataDisplayed = true;
+                        }
+                    }
+                } else {
+                    throw new Error('Server response not OK');
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                updateConnectionStatus(false);
+                if (!noDataDisplayed) {
+                    showNoDataMessage();
+                    noDataDisplayed = true;
+                }
+            }
+        }
+
+        // Show no data message
+        function showNoDataMessage() {
+            document.getElementById('tempValue').textContent = '--';
+            document.getElementById('vibValue').textContent = '--';
+            document.getElementById('humValue').textContent = '--';
+            document.getElementById('pressValue').textContent = '--';
+            
+            updateStatus('tempStatus', 'SYSTEM OFFLINE');
+            updateStatus('vibStatus', 'SYSTEM OFFLINE');
+            updateStatus('humStatus', 'SYSTEM OFFLINE');
+            updateStatus('pressStatus', 'SYSTEM OFFLINE');
+            
+            // Load recent readings from database when offline
+            loadRecentReadings();
+        }
+
+        // Update dashboard with new data
+        function updateDashboard(data, isStale = false) {
+            // Update current values
+            document.getElementById('tempValue').textContent = data.temperature?.toFixed(1) || '--';
+            document.getElementById('vibValue').textContent = data.vibration?.toFixed(3) || '--';
+            document.getElementById('humValue').textContent = data.humidity?.toFixed(1) || '--';
+            document.getElementById('pressValue').textContent = data.pressure?.toFixed(1) || '--';
+
+            // Update status indicators
+            if (isStale) {
+                updateStatus('tempStatus', 'SYSTEM OFFLINE');
+                updateStatus('vibStatus', 'SYSTEM OFFLINE');
+                updateStatus('humStatus', 'SYSTEM OFFLINE');
+                updateStatus('pressStatus', 'SYSTEM OFFLINE');
+                
+                // Add stale indicator to all cards
+                document.getElementById('tempCard').classList.add('stale-indicator');
+                document.getElementById('vibCard').classList.add('stale-indicator');
+                document.getElementById('humCard').classList.add('stale-indicator');
+                document.getElementById('pressCard').classList.add('stale-indicator');
+            } else {
+                updateStatus('tempStatus', data.temp_status);
+                updateStatus('vibStatus', data.vib_status);
+                updateStatus('humStatus', 'Environmental');
+                updateStatus('pressStatus', 'Atmospheric');
+                
+                // Remove stale indicator from all cards
+                document.getElementById('tempCard').classList.remove('stale-indicator');
+                document.getElementById('vibCard').classList.remove('stale-indicator');
+                document.getElementById('humCard').classList.remove('stale-indicator');
+                document.getElementById('pressCard').classList.remove('stale-indicator');
+            }
+
+            // Only update charts with fresh data
+            if (!isStale) {
+                const currentTime = new Date().toLocaleTimeString();
+                
+                // Keep only last 20 data points
+                if (tempData.length >= 20) {
+                    tempData.shift();
+                    vibData.shift();
+                    timeLabels.shift();
+                }
+
+                tempData.push(data.temperature);
+                vibData.push(data.vibration);
+                timeLabels.push(currentTime);
+
+                tempChart.update();
+                vibChart.update();
+            }
+
+            // Update last update time
+            const updateTime = isStale ? 
+                `${new Date(data.created_at).toLocaleString()} (System was online ${data.dataAge}s ago)` : 
+                new Date().toLocaleString();
+            document.getElementById('lastUpdate').textContent = updateTime;
+
+            // Update recent readings table only with fresh data
+            if (!isStale) {
+                updateDataTable(data);
+            } else {
+                // When data is stale, load recent readings from database
+                loadRecentReadings();
+            }
+        }
+
+        // Update data table (for live data)
+        function updateDataTable(data) {
+            const tableBody = document.getElementById('dataTableBody');
+            const currentTime = new Date().toLocaleString();
+            
+            // Create new row
+            const row = `
+                <tr>
+                    <td>${currentTime}</td>
+                    <td>${data.temperature?.toFixed(1) || '--'}°C</td>
+                    <td>${data.vibration?.toFixed(3) || '--'} m/s²</td>
+                    <td>${data.temp_status || 'Unknown'} / ${data.vib_status || 'Unknown'}</td>
+                </tr>
+            `;
+            
+            // Add to top of table
+            tableBody.insertAdjacentHTML('afterbegin', row);
+            
+            // Keep only last 10 rows
+            while (tableBody.children.length > 10) {
+                tableBody.removeChild(tableBody.lastChild);
+            }
+        }
+
+        // Load recent readings when system is offline
+        async function loadRecentReadings() {
+            try {
+                console.log('📊 Loading recent readings from MongoDB...');
+                const response = await fetch('/api/recent');
+                
+                if (response.ok) {
+                    const recentData = await response.json();
+                    console.log('📊 Received data:', recentData.length, 'readings');
+                    updateRecentReadingsTable(recentData);
+                } else {
+                    console.error('❌ Response not OK:', response.status);
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                console.error('❌ Error loading recent readings:', error);
+                const tableBody = document.getElementById('dataTableBody');
+                tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">⚠️ Error loading historical data: ' + error.message + '</td></tr>';
+            }
+        }
+
+        // Update recent readings table with historical data
+        function updateRecentReadingsTable(dataArray) {
+            const tableBody = document.getElementById('dataTableBody');
+            
+            console.log('📊 Updating table with', dataArray.length, 'readings');
+            
+            if (dataArray && dataArray.length > 0) {
+                let tableHTML = '';
+                dataArray.forEach(data => {
+                    // Use created_at from MongoDB since that's what we have
+                    const readingTime = new Date(data.created_at).toLocaleString();
+                    tableHTML += `
+                        <tr class="historical-row">
+                            <td>${readingTime}</td>
+                            <td>${data.temperature?.toFixed(1) || '--'}°C</td>
+                            <td>${data.vibration?.toFixed(3) || '--'} m/s²</td>
+                            <td>${data.temp_status || 'Unknown'} / ${data.vib_status || 'Unknown'}</td>
+                        </tr>
+                    `;
+                });
+                tableBody.innerHTML = tableHTML;
+                console.log('✅ Table updated with historical data');
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">📊 No historical data available</td></tr>';
+                console.log('⚠️ No historical data to display');
+            }
+        }
+
+        // Update status indicators
+        function updateStatus(elementId, status) {
+            const element = document.getElementById(elementId);
+            element.textContent = status || 'Unknown';
+            
+            // Remove existing status classes
+            element.className = 'card-status';
+            
+            // Add appropriate status class
+            switch(status?.toLowerCase()) {
+                case 'normal':
+                    element.classList.add('status-normal');
+                    break;
+                case 'warm':
+                    element.classList.add('status-warm');
+                    break;
+                case 'high':
+                    element.classList.add('status-high');
+                    break;
+                case 'low':
+                    element.classList.add('status-low');
+                    break;
+                case 'active':
+                    element.classList.add('status-active');
+                    break;
+                case 'stale':
+                    element.classList.add('status-stale');
+                    break;
+                case 'no data':
+                    element.classList.add('status-stale');
+                    break;
+                case 'system offline':
+                    element.classList.add('status-stale');
+                    break;
+                case 'environmental':
+                    element.classList.add('status-normal');
+                    break;
+                case 'atmospheric':
+                    element.classList.add('status-normal');
+                    break;
+                default:
+                    element.classList.add('status-normal');
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            isConnected = connected;
+            
+            if (connected) {
+                statusElement.textContent = '🟢 Connected';
+                statusElement.className = 'connection-status connected';
+            } else {
+                statusElement.textContent = '🔴 Disconnected';
+                statusElement.className = 'connection-status disconnected';
+            }
+        }
+
+        // Fetch system statistics
+        async function fetchSystemStats() {
+            try {
+                const response = await fetch('/api/stats');
+                if (response.ok) {
+                    const stats = await response.json();
+                    updateSystemInfo(stats);
+                }
+            } catch (error) {
+                console.error('Error fetching system stats:', error);
+            }
+        }
+
+        // Update system information
+        function updateSystemInfo(stats) {
+            const systemInfoDiv = document.getElementById('systemInfo');
+            systemInfoDiv.innerHTML = `
+                <div class="info-card">
+                    <div style="font-size: 1.5em; font-weight: bold;">${stats.totalRecords || 0}</div>
+                    <div>Total Records</div>
+                </div>
+                <div class="info-card">
+                    <div style="font-size: 1.5em; font-weight: bold;">${stats.systemUptime || 'Unknown'}</div>
+                    <div>System Uptime</div>
+                </div>
+                <div class="info-card">
+                    <div style="font-size: 1.5em; font-weight: bold;">${stats.databaseConnected ? '✅' : '❌'}</div>
+                    <div>Database Status</div>
+                </div>
+                <div class="info-card">
+                    <div style="font-size: 1.5em; font-weight: bold;">${stats.mqttConnected ? '🟢' : '🔴'}</div>
+                    <div>MQTT Broker</div>
+                </div>
+                <div class="info-card">
+                    <div style="font-size: 1.5em; font-weight: bold;">${isConnected ? '🟢' : '🔴'}</div>
+                    <div>ESP32 Status</div>
+                </div>
+            `;
+        }
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            
+            // Fetch data immediately
+            fetchData();
+            fetchSystemStats();
+            
+            // Set up periodic data fetching (every 5 seconds)
+            setInterval(fetchData, 5000);
+            
+            // Update system stats every 30 seconds
+            setInterval(fetchSystemStats, 30000);
+            
+            console.log('🚀 MQTT Dashboard initialized - monitoring ESP32 connection...');
+            console.log('🎮 MQTT control buttons ready for motor commands');
+        });
+    </script>
+</body>
+</html>
