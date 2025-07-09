@@ -410,7 +410,21 @@
             </div>
 
             <div class="card" id="vibCard">
-                <div class="card-icon">🌊</div>
+              <div class="card-icon">
+        <svg width="60" height="40" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
+            <polyline points="0,20 15,20 18,5 22,35 26,10 30,25 35,20 50,20 53,8 57,32 61,12 65,28 70,20 85,20 88,6 92,34 96,8 100,26 105,20 120,20" 
+                      fill="none" 
+                      stroke="#00bfff" 
+                      stroke-width="2" 
+                      stroke-linecap="round" 
+                      stroke-linejoin="round">
+                <animate attributeName="stroke-dasharray" 
+                         values="0,200;200,0;0,200" 
+                         dur="3s" 
+                         repeatCount="indefinite"/>
+            </polyline>
+        </svg>
+    </div>
                 <div class="card-value" id="vibValue">--</div>
                 <div class="card-label">Vibration (m/s²)</div>
                 <div class="card-status" id="vibStatus">Loading...</div>
@@ -928,4 +942,4 @@
         });
     </script>
 </body>
-</html>
+</html> 
