@@ -39,7 +39,7 @@ const SensorSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
-const SensorReading = mongoose.model('SensorReading', SensorSchema);
+const SensorReading = mongoose.model('SensorReading', SensorSchema, 'sensorreadings');
 
 // Motor Command Schema for logging
 const MotorCommandSchema = new mongoose.Schema({
@@ -52,7 +52,7 @@ const MotorCommandSchema = new mongoose.Schema({
   feedback: String
 });
 
-const MotorCommand = mongoose.model('MotorCommand', MotorCommandSchema);
+const MotorCommand = mongoose.model('MotorCommand', MotorCommandSchema, 'motorcommands');
 
 // MQTT Setup
 const MQTT_BROKER = 'mqtt://localhost:1883';
@@ -494,9 +494,360 @@ app.get('/api/motor/diagnostics', async (req, res) => {
   }
 });
 
+// ===== ANALYTICS API ENDPOINTS =====
+
+// Analytics data endpoint with filtering and aggregation
+app.get('/api/analytics/data', async (req, res) => {
+  try {
+    const { 
+      startDate, 
+      endDate, 
+      aggregation = 'raw',
+      page = 1,
+      limit = 100,
+      export: exportFormat
+    } = req.query;
+
+    console.log('📊 Analytics data request:', { startDate, endDate, aggregation, page, limit });
+
+    // Build date filter
+    const dateFilter = {};
+    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (endDate) dateFilter.$lte = new Date(endDate);
+
+    let query = {};
+    if (Object.keys(dateFilter).length > 0) {
+      query.created_at = dateFilter;
+    }
+
+    let data;
+    let totalCount;
+
+    if (aggregation === 'raw') {
+      // Raw data with pagination
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      if (exportFormat) {
+        // For export, get all data without pagination
+        data = await SensorReading
+          .find(query)
+          .sort({ created_at: -1 })
+          .lean();
+        totalCount = data.length;
+      } else {
+        // For regular requests, use pagination
+        data = await SensorReading
+          .find(query)
+          .sort({ created_at: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .lean();
+        totalCount = await SensorReading.countDocuments(query);
+      }
+    } else {
+      // Aggregated data
+      const groupBy = getGroupByExpression(aggregation);
+      
+      data = await SensorReading.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: groupBy,
+            count: { $sum: 1 },
+            avg_temperature: { $avg: '$temperature' },
+            avg_humidity: { $avg: '$humidity' },
+            avg_pressure: { $avg: '$pressure' },
+            avg_vibration: { $avg: '$vibration' },
+            avg_motor_speed: { $avg: '$motor_speed' },
+            max_temperature: { $max: '$temperature' },
+            min_temperature: { $min: '$temperature' },
+            max_vibration: { $max: '$vibration' },
+            fault_count: {
+              $sum: {
+                $cond: [
+                  { $or: [
+                    { $eq: ['$temp_status', 'HIGH'] },
+                    { $eq: ['$vib_status', 'HIGH'] }
+                  ]},
+                  1, 0
+                ]
+              }
+            }
+          }
+        },
+        { $sort: { '_id': -1 } }
+      ]);
+      
+      totalCount = data.length;
+    }
+
+    console.log(`📊 Retrieved ${data.length} analytics records`);
+
+    const response = {
+      data,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalCount,
+        pages: Math.ceil(totalCount / parseInt(limit))
+      },
+      aggregation,
+      dateRange: { startDate, endDate }
+    };
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error fetching analytics data:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch analytics data',
+      details: error.message 
+    });
+  }
+});
+
+// Analytics statistics endpoint
+app.get('/api/analytics/stats', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Build date filter
+    const dateFilter = {};
+    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (endDate) dateFilter.$lte = new Date(endDate);
+
+    let matchQuery = {};
+    if (Object.keys(dateFilter).length > 0) {
+      matchQuery.created_at = dateFilter;
+    }
+
+    const stats = await SensorReading.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          totalReadings: { $sum: 1 },
+          avgTemperature: { $avg: '$temperature' },
+          minTemperature: { $min: '$temperature' },
+          maxTemperature: { $max: '$temperature' },
+          avgHumidity: { $avg: '$humidity' },
+          avgPressure: { $avg: '$pressure' },
+          avgVibration: { $avg: '$vibration' },
+          maxVibration: { $max: '$vibration' },
+          avgMotorSpeed: { $avg: '$motor_speed' },
+          temperatureFaults: {
+            $sum: { $cond: [{ $eq: ['$temp_status', 'HIGH'] }, 1, 0] }
+          },
+          vibrationFaults: {
+            $sum: { $cond: [{ $eq: ['$vib_status', 'HIGH'] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    const result = stats[0] || {
+      totalReadings: 0,
+      avgTemperature: 0,
+      minTemperature: 0,
+      maxTemperature: 0,
+      avgHumidity: 0,
+      avgPressure: 0,
+      avgVibration: 0,
+      maxVibration: 0,
+      avgMotorSpeed: 0,
+      temperatureFaults: 0,
+      vibrationFaults: 0
+    };
+
+    // Calculate fault rates
+    result.temperatureFaultRate = result.totalReadings > 0 ? 
+      (result.temperatureFaults / result.totalReadings * 100) : 0;
+    result.vibrationFaultRate = result.totalReadings > 0 ? 
+      (result.vibrationFaults / result.totalReadings * 100) : 0;
+
+    console.log('📊 Analytics statistics calculated');
+    res.json(result);
+
+  } catch (error) {
+    console.error('❌ Error calculating analytics stats:', error);
+    res.status(500).json({ 
+      error: 'Failed to calculate statistics',
+      details: error.message 
+    });
+  }
+});
+
+// Analytics correlations endpoint
+app.get('/api/analytics/correlations', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Build date filter
+    const dateFilter = {};
+    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (endDate) dateFilter.$lte = new Date(endDate);
+
+    let matchQuery = {};
+    if (Object.keys(dateFilter).length > 0) {
+      matchQuery.created_at = dateFilter;
+    }
+
+    const data = await SensorReading
+      .find(matchQuery)
+      .select('temperature humidity pressure vibration motor_speed')
+      .lean();
+
+    if (data.length === 0) {
+      return res.json({ correlations: {}, message: 'No data available for correlation analysis' });
+    }
+
+    // Calculate correlations
+    const correlations = calculateCorrelations(data);
+
+    console.log('📊 Correlation matrix calculated');
+    res.json({ correlations, sampleSize: data.length });
+
+  } catch (error) {
+    console.error('❌ Error calculating correlations:', error);
+    res.status(500).json({ 
+      error: 'Failed to calculate correlations',
+      details: error.message 
+    });
+  }
+});
+
+// Analytics export endpoint
+app.get('/api/analytics/export', async (req, res) => {
+  try {
+    const { startDate, endDate, format = 'csv' } = req.query;
+
+    // Get data using the same logic as the data endpoint
+    const dataResponse = await new Promise((resolve, reject) => {
+      // Simulate the /api/analytics/data call
+      const mockReq = {
+        query: { startDate, endDate, aggregation: 'raw', export: 'true' }
+      };
+      const mockRes = {
+        json: (data) => resolve(data),
+        status: () => ({ json: (error) => reject(error) })
+      };
+      
+      // We'll call our own endpoint logic here
+      app._router.handle(mockReq, mockRes);
+    });
+
+    const data = dataResponse.data;
+
+    if (format === 'csv') {
+      // Convert to CSV
+      const csv = convertToCSV(data);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="motor_data_${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csv);
+    } else {
+      // Return JSON
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="motor_data_${new Date().toISOString().split('T')[0]}.json"`);
+      res.json(data);
+    }
+
+    console.log(`📊 Data exported in ${format} format`);
+
+  } catch (error) {
+    console.error('❌ Error exporting data:', error);
+    res.status(500).json({ 
+      error: 'Failed to export data',
+      details: error.message 
+    });
+  }
+});
+
+// Helper functions for analytics
+
+function getGroupByExpression(aggregation) {
+  const timeFormats = {
+    hourly: {
+      year: { $year: '$created_at' },
+      month: { $month: '$created_at' },
+      day: { $dayOfMonth: '$created_at' },
+      hour: { $hour: '$created_at' }
+    },
+    daily: {
+      year: { $year: '$created_at' },
+      month: { $month: '$created_at' },
+      day: { $dayOfMonth: '$created_at' }
+    },
+    weekly: {
+      year: { $year: '$created_at' },
+      week: { $week: '$created_at' }
+    }
+  };
+
+  return timeFormats[aggregation] || timeFormats.daily;
+}
+
+function calculateCorrelations(data) {
+  const fields = ['temperature', 'humidity', 'pressure', 'vibration', 'motor_speed'];
+  const correlations = {};
+
+  fields.forEach(field1 => {
+    correlations[field1] = {};
+    fields.forEach(field2 => {
+      correlations[field1][field2] = calculatePearsonCorrelation(
+        data.map(d => d[field1]).filter(v => v != null),
+        data.map(d => d[field2]).filter(v => v != null)
+      );
+    });
+  });
+
+  return correlations;
+}
+
+function calculatePearsonCorrelation(x, y) {
+  if (x.length !== y.length || x.length === 0) return 0;
+
+  const n = x.length;
+  const sumX = x.reduce((a, b) => a + b, 0);
+  const sumY = y.reduce((a, b) => a + b, 0);
+  const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+  const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+  const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
+
+  const numerator = n * sumXY - sumX * sumY;
+  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function convertToCSV(data) {
+  if (!data || data.length === 0) return '';
+
+  const headers = Object.keys(data[0]);
+  const csvContent = [
+    headers.join(','),
+    ...data.map(row => 
+      headers.map(header => {
+        const value = row[header];
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string' && value.includes(',')) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      }).join(',')
+    )
+  ].join('\n');
+
+  return csvContent;
+}
+
 // Serve the enhanced dashboard
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Serve the analytics dashboard
+app.get('/analytics', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'analytics.html'));
 });
 
 // Start server
@@ -505,19 +856,19 @@ app.listen(PORT, () => {
   console.log('║     🚀 ENHANCED MQTT MOTOR DASHBOARD           ║');
   console.log('║                                                ║');
   console.log('║  Student: Gourav Shaw (T0436800)               ║');
-  console.log('║  Enhanced Motor Control + BTS7960              ║');
+  console.log('║  Enhanced Motor Control + Analytics            ║');
   console.log('║                                                ║');
   console.log(`║  🌐 Server: http://localhost:${PORT}              ║`);
+  console.log(`║  📊 Analytics: http://localhost:${PORT}/analytics ║`);
   console.log('║  📡 MQTT: mqtt://localhost:1883               ║');
   console.log('║  💾 MongoDB: mongodb://localhost:27017        ║');
   console.log('║                                                ║');
   console.log('║  🎮 Features:                                  ║');
   console.log('║  • Real-time sensor monitoring                ║');
   console.log('║  • Advanced motor control (BTS7960)           ║');
-  console.log('║  • Variable speed control (0-100%)            ║');
-  console.log('║  • Direction control (Forward/Reverse)        ║');
-  console.log('║  • Gradual speed transitions                  ║');
-  console.log('║  • Automatic fault responses                  ║');
+  console.log('║  • Professional analytics dashboard           ║');
+  console.log('║  • Statistical analysis & correlations       ║');
+  console.log('║  • Data export (CSV/JSON)                     ║');
   console.log('║  • Motor command logging                      ║');
   console.log('║  • Enhanced MQTT communication               ║');
   console.log('╚════════════════════════════════════════════════╝');

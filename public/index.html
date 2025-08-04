@@ -25,6 +25,7 @@
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
         }
 
         .header h1 {
@@ -38,6 +39,28 @@
             font-size: 1.2em;
             opacity: 0.9;
             color: #cccccc;
+        }
+
+        .analytics-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background: linear-gradient(45deg, #2196F3, #1565C0);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        }
+
+        .analytics-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
         }
 
         .container {
@@ -362,6 +385,7 @@
             padding: 20px;
             border: 1px solid rgba(255, 255, 255, 0.15);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
         }
 
         .chart-title {
@@ -369,6 +393,27 @@
             margin-bottom: 15px;
             text-align: center;
             color: #00ff88;
+        }
+
+        .chart-analyze-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 8px 16px;
+            background: linear-gradient(45deg, #FF9800, #F57C00);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(255, 152, 0, 0.3);
+        }
+
+        .chart-analyze-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
         }
 
         .data-table {
@@ -407,7 +452,7 @@
         .connection-status {
             position: fixed;
             top: 20px;
-            right: 20px;
+            left: 20px;
             padding: 10px 20px;
             border-radius: 25px;
             font-weight: bold;
@@ -509,6 +554,11 @@
             .charts-section {
                 grid-template-columns: 1fr;
             }
+
+            .analytics-btn {
+                position: static;
+                margin-top: 15px;
+            }
         }
 
         @media (max-width: 768px) {
@@ -527,6 +577,12 @@
 
             .preset-speeds {
                 grid-template-columns: repeat(2, 1fr);
+            }
+
+            .connection-status {
+                position: static;
+                margin-bottom: 20px;
+                display: inline-block;
             }
         }
 
@@ -555,6 +611,7 @@
     <div class="command-feedback" id="commandFeedback"></div>
 
     <div class="header">
+        <a href="/analytics" class="analytics-btn">📊 Analytics Dashboard</a>
         <h1>⚙️ Motor Control Dashboard</h1>
         <p>Real-time IoT Motor Monitoring with PWM Control</p>
     </div>
@@ -709,11 +766,13 @@
         <!-- Charts -->
         <div class="charts-section">
             <div class="chart-container">
+                <button class="chart-analyze-btn" onclick="window.open('/analytics', '_blank')">📊 Analyze</button>
                 <div class="chart-title">Temperature & Motor Speed Trend</div>
                 <canvas id="tempChart" width="400" height="200"></canvas>
             </div>
 
             <div class="chart-container">
+                <button class="chart-analyze-btn" onclick="window.open('/analytics', '_blank')">📊 Analyze</button>
                 <div class="chart-title">Vibration Pattern</div>
                 <canvas id="vibChart" width="400" height="200"></canvas>
             </div>
@@ -1361,6 +1420,7 @@
             console.log('🎛️ Advanced motor control interface ready');
             console.log('⚙️ BTS7960 motor driver control active');
             console.log('📊 Real-time motor status monitoring enabled');
+            console.log('📊 Analytics dashboard available at /analytics');
             
             // Add keyboard shortcuts for quick testing (development only)
             document.addEventListener('keydown', function(event) {
