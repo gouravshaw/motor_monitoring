@@ -18,7 +18,7 @@ mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Enhanced Schema with motor data
+// Enhanced Schema with current sensor data
 const SensorSchema = new mongoose.Schema({
   timestamp: String,
   temperature: Number,
@@ -35,6 +35,14 @@ const SensorSchema = new mongoose.Schema({
   motor_status: { type: String, default: 'stopped' },
   motor_enabled: { type: Boolean, default: true },
   is_transitioning: { type: Boolean, default: false },
+  
+  // NEW: Current sensor fields
+  motor_current: { type: Number, default: 0 },
+  motor_power: { type: Number, default: 0 },
+  current_status: { type: String, default: 'IDLE' },
+  max_current: { type: Number, default: 0 },
+  total_energy: { type: Number, default: 0 },
+  
   device_id: String,
   created_at: { type: Date, default: Date.now }
 });
@@ -103,7 +111,7 @@ client.on('message', async (topic, message) => {
     console.log(`📨 MQTT [${topic}]: ${message.toString().substring(0, 150)}...`);
     
     if (topic === TOPICS.SENSORS) {
-      // Handle sensor data with motor information
+      // Handle sensor data with enhanced motor and current information
       latestSensorData = {
         ...data,
         isConnected: true,
@@ -129,11 +137,19 @@ client.on('message', async (topic, message) => {
           motor_status: data.motor_status,
           motor_enabled: data.motor_enabled,
           is_transitioning: data.is_transitioning,
+          
+          // NEW: Current sensor data
+          motor_current: data.motor_current || 0,
+          motor_power: data.motor_power || 0,
+          current_status: data.current_status || 'IDLE',
+          max_current: data.max_current || 0,
+          total_energy: data.total_energy || 0,
+          
           device_id: data.device_id
         });
         
         await sensorReading.save();
-        console.log('💾 Enhanced sensor data saved to MongoDB');
+        console.log('💾 Enhanced sensor data with current monitoring saved to MongoDB');
       } catch (saveError) {
         console.error('❌ Error saving to MongoDB:', saveError);
       }
@@ -234,7 +250,7 @@ app.post('/api/control', async (req, res) => {
   }
 });
 
-// NEW: Enhanced motor control endpoint for speed/direction
+// Enhanced motor control endpoint for speed/direction
 app.post('/api/motor/set', async (req, res) => {
   try {
     const { speed, direction, transition } = req.body;
@@ -444,7 +460,7 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// Motor diagnostics endpoint
+// Enhanced motor diagnostics endpoint with current data
 app.get('/api/motor/diagnostics', async (req, res) => {
   try {
     const now = new Date();
@@ -459,15 +475,34 @@ app.get('/api/motor/diagnostics', async (req, res) => {
       .sort({ created_at: -1 })
       .lean();
     
-    // Calculate motor diagnostics
+    // Calculate enhanced motor diagnostics with current data
     const diagnostics = {
       totalOperatingTime: motorData.length * 5, // 5 seconds per reading
       averageSpeed: motorData.length > 0 ? 
         motorData.reduce((sum, d) => sum + (d.motor_speed || 0), 0) / motorData.length : 0,
+      
+      // NEW: Current-based diagnostics
+      averageCurrent: motorData.length > 0 ?
+        motorData.reduce((sum, d) => sum + (d.motor_current || 0), 0) / motorData.length : 0,
+      peakCurrent: Math.max(...motorData.map(d => d.motor_current || 0)),
+      totalEnergyConsumed: motorData.length > 0 ? 
+        Math.max(...motorData.map(d => d.total_energy || 0)) : 0,
+      averagePower: motorData.length > 0 ?
+        motorData.reduce((sum, d) => sum + (d.motor_power || 0), 0) / motorData.length : 0,
+      
       speedChanges: 0,
       directionChanges: 0,
       emergencyStops: 0,
-      transitions: motorData.filter(d => d.is_transitioning).length
+      transitions: motorData.filter(d => d.is_transitioning).length,
+      
+      // NEW: Current anomalies
+      currentSpikes: motorData.filter(d => (d.motor_current || 0) > 25).length,
+      overloadEvents: motorData.filter(d => d.current_status === 'OVERLOAD').length,
+      faultEvents: motorData.filter(d => d.current_status === 'FAULT').length,
+      
+      // Power efficiency metrics
+      powerEfficiency: 0,
+      currentStability: 0
     };
     
     // Count speed and direction changes
@@ -483,10 +518,26 @@ app.get('/api/motor/diagnostics', async (req, res) => {
       }
     }
     
+    // Calculate power efficiency (Speed/Power ratio)
+    const powerData = motorData.filter(d => d.motor_power > 0 && d.motor_speed > 0);
+    if (powerData.length > 0) {
+      diagnostics.powerEfficiency = powerData.reduce((sum, d) => 
+        sum + (d.motor_speed / d.motor_power), 0) / powerData.length;
+    }
+    
+    // Calculate current stability (coefficient of variation)
+    const currentData = motorData.map(d => d.motor_current || 0).filter(c => c > 0);
+    if (currentData.length > 1) {
+      const mean = currentData.reduce((sum, c) => sum + c, 0) / currentData.length;
+      const variance = currentData.reduce((sum, c) => sum + Math.pow(c - mean, 2), 0) / currentData.length;
+      const stdDev = Math.sqrt(variance);
+      diagnostics.currentStability = mean > 0 ? (stdDev / mean) : 0;
+    }
+    
     res.json(diagnostics);
     
   } catch (error) {
-    console.error('❌ Error generating motor diagnostics:', error);
+    console.error('❌ Error generating enhanced motor diagnostics:', error);
     res.status(500).json({ 
       error: 'Failed to generate motor diagnostics',
       details: error.message 
@@ -559,15 +610,20 @@ app.get('/api/analytics/data', async (req, res) => {
             avg_pressure: { $avg: '$pressure' },
             avg_vibration: { $avg: '$vibration' },
             avg_motor_speed: { $avg: '$motor_speed' },
+            avg_motor_current: { $avg: '$motor_current' },
+            avg_motor_power: { $avg: '$motor_power' },
             max_temperature: { $max: '$temperature' },
             min_temperature: { $min: '$temperature' },
             max_vibration: { $max: '$vibration' },
+            max_current: { $max: '$motor_current' },
             fault_count: {
               $sum: {
                 $cond: [
                   { $or: [
                     { $eq: ['$temp_status', 'HIGH'] },
-                    { $eq: ['$vib_status', 'HIGH'] }
+                    { $eq: ['$vib_status', 'HIGH'] },
+                    { $eq: ['$current_status', 'OVERLOAD'] },
+                    { $eq: ['$current_status', 'FAULT'] }
                   ]},
                   1, 0
                 ]
@@ -606,7 +662,7 @@ app.get('/api/analytics/data', async (req, res) => {
   }
 });
 
-// Analytics statistics endpoint
+// Enhanced analytics statistics endpoint with current data
 app.get('/api/analytics/stats', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -635,11 +691,27 @@ app.get('/api/analytics/stats', async (req, res) => {
           avgVibration: { $avg: '$vibration' },
           maxVibration: { $max: '$vibration' },
           avgMotorSpeed: { $avg: '$motor_speed' },
+          
+          // NEW: Current sensor statistics
+          avgMotorCurrent: { $avg: '$motor_current' },
+          maxMotorCurrent: { $max: '$motor_current' },
+          avgMotorPower: { $avg: '$motor_power' },
+          maxMotorPower: { $max: '$motor_power' },
+          totalEnergyConsumed: { $max: '$total_energy' },
+          
           temperatureFaults: {
             $sum: { $cond: [{ $eq: ['$temp_status', 'HIGH'] }, 1, 0] }
           },
           vibrationFaults: {
             $sum: { $cond: [{ $eq: ['$vib_status', 'HIGH'] }, 1, 0] }
+          },
+          
+          // NEW: Current-based fault detection
+          currentOverloads: {
+            $sum: { $cond: [{ $eq: ['$current_status', 'OVERLOAD'] }, 1, 0] }
+          },
+          currentFaults: {
+            $sum: { $cond: [{ $eq: ['$current_status', 'FAULT'] }, 1, 0] }
           }
         }
       }
@@ -655,8 +727,15 @@ app.get('/api/analytics/stats', async (req, res) => {
       avgVibration: 0,
       maxVibration: 0,
       avgMotorSpeed: 0,
+      avgMotorCurrent: 0,
+      maxMotorCurrent: 0,
+      avgMotorPower: 0,
+      maxMotorPower: 0,
+      totalEnergyConsumed: 0,
       temperatureFaults: 0,
-      vibrationFaults: 0
+      vibrationFaults: 0,
+      currentOverloads: 0,
+      currentFaults: 0
     };
 
     // Calculate fault rates
@@ -664,12 +743,22 @@ app.get('/api/analytics/stats', async (req, res) => {
       (result.temperatureFaults / result.totalReadings * 100) : 0;
     result.vibrationFaultRate = result.totalReadings > 0 ? 
       (result.vibrationFaults / result.totalReadings * 100) : 0;
+    result.currentOverloadRate = result.totalReadings > 0 ? 
+      (result.currentOverloads / result.totalReadings * 100) : 0;
+    result.currentFaultRate = result.totalReadings > 0 ? 
+      (result.currentFaults / result.totalReadings * 100) : 0;
 
-    console.log('📊 Analytics statistics calculated');
+    // Calculate power efficiency metrics
+    if (result.avgMotorSpeed > 0 && result.avgMotorPower > 0) {
+      result.powerEfficiency = result.avgMotorSpeed / result.avgMotorPower;
+      result.specificPowerConsumption = result.avgMotorPower / result.avgMotorSpeed; // W per %speed
+    }
+
+    console.log('📊 Enhanced analytics statistics calculated with current data');
     res.json(result);
 
   } catch (error) {
-    console.error('❌ Error calculating analytics stats:', error);
+    console.error('❌ Error calculating enhanced analytics stats:', error);
     res.status(500).json({ 
       error: 'Failed to calculate statistics',
       details: error.message 
@@ -677,7 +766,7 @@ app.get('/api/analytics/stats', async (req, res) => {
   }
 });
 
-// Analytics correlations endpoint
+// Enhanced correlations endpoint with current data
 app.get('/api/analytics/correlations', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -694,21 +783,21 @@ app.get('/api/analytics/correlations', async (req, res) => {
 
     const data = await SensorReading
       .find(matchQuery)
-      .select('temperature humidity pressure vibration motor_speed')
+      .select('temperature humidity pressure vibration motor_speed motor_current motor_power')
       .lean();
 
     if (data.length === 0) {
       return res.json({ correlations: {}, message: 'No data available for correlation analysis' });
     }
 
-    // Calculate correlations
-    const correlations = calculateCorrelations(data);
+    // Calculate correlations with enhanced dataset
+    const correlations = calculateEnhancedCorrelations(data);
 
-    console.log('📊 Correlation matrix calculated');
+    console.log('📊 Enhanced correlation matrix calculated with current data');
     res.json({ correlations, sampleSize: data.length });
 
   } catch (error) {
-    console.error('❌ Error calculating correlations:', error);
+    console.error('❌ Error calculating enhanced correlations:', error);
     res.status(500).json({ 
       error: 'Failed to calculate correlations',
       details: error.message 
@@ -786,8 +875,9 @@ function getGroupByExpression(aggregation) {
   return timeFormats[aggregation] || timeFormats.daily;
 }
 
-function calculateCorrelations(data) {
-  const fields = ['temperature', 'humidity', 'pressure', 'vibration', 'motor_speed'];
+// Enhanced correlation calculation function
+function calculateEnhancedCorrelations(data) {
+  const fields = ['temperature', 'humidity', 'pressure', 'vibration', 'motor_speed', 'motor_current', 'motor_power'];
   const correlations = {};
 
   fields.forEach(field1 => {
@@ -856,7 +946,7 @@ app.listen(PORT, () => {
   console.log('║     🚀 ENHANCED MQTT MOTOR DASHBOARD           ║');
   console.log('║                                                ║');
   console.log('║  Student: Gourav Shaw (T0436800)               ║');
-  console.log('║  Enhanced Motor Control + Analytics            ║');
+  console.log('║  Enhanced Motor Control                        ║');
   console.log('║                                                ║');
   console.log(`║  🌐 Server: http://localhost:${PORT}              ║`);
   console.log(`║  📊 Analytics: http://localhost:${PORT}/analytics ║`);
@@ -866,6 +956,7 @@ app.listen(PORT, () => {
   console.log('║  🎮 Features:                                  ║');
   console.log('║  • Real-time sensor monitoring                ║');
   console.log('║  • Advanced motor control (BTS7960)           ║');
+  console.log('║  • ACS712 current sensor monitoring           ║');
   console.log('║  • Professional analytics dashboard           ║');
   console.log('║  • Statistical analysis & correlations       ║');
   console.log('║  • Data export (CSV/JSON)                     ║');

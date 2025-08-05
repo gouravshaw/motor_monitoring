@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Motor Analytics Dashboard - Professional Data Analysis</title>
+    <title>Motor Analytics Dashboard - Professional Data Analysis with Current Monitoring</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
@@ -521,7 +521,7 @@
         <a href="/" class="back-btn">← Back to Dashboard</a>
         <div class="header-content">
             <h1>📊 Motor Analytics Dashboard</h1>
-            <p>Professional Data Analysis & Statistical Insights</p>
+            <p>Professional Data Analysis & Statistical Insights with Current Monitoring</p>
         </div>
     </div>
 
@@ -562,7 +562,7 @@
             </div>
         </div>
 
-        <!-- Statistics Overview -->
+        <!-- Enhanced Statistics Overview with Current Data -->
         <div class="stats-overview" id="statsOverview">
             <div class="stat-card">
                 <div class="stat-value" id="totalReadings">--</div>
@@ -580,42 +580,59 @@
                 <div class="stat-value" id="avgMotorSpeed">--%</div>
                 <div class="stat-label">Avg Motor Speed</div>
             </div>
+            <!-- NEW: Current monitoring statistics -->
+            <div class="stat-card">
+                <div class="stat-value" id="avgMotorCurrent">-- A</div>
+                <div class="stat-label">Avg Motor Current</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avgMotorPower">-- W</div>
+                <div class="stat-label">Avg Motor Power</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="maxMotorCurrent">-- A</div>
+                <div class="stat-label">Peak Current</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalEnergyConsumed">-- Ah</div>
+                <div class="stat-label">Total Energy</div>
+            </div>
             <div class="stat-card">
                 <div class="stat-value" id="faultRate">--%</div>
                 <div class="stat-label">Fault Rate</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="maxVibration">--</div>
-                <div class="stat-label">Max Vibration</div>
+                <div class="stat-value" id="currentFaultRate">--%</div>
+                <div class="stat-label">Current Fault Rate</div>
             </div>
         </div>
 
-        <!-- Charts Section -->
+        <!-- Enhanced Charts Section -->
         <div class="charts-grid">
             <div class="chart-container">
-                <div class="chart-title">Temperature vs Motor Speed Correlation</div>
-                <canvas id="tempMotorChart" width="400" height="300"></canvas>
+                <div class="chart-title">Temperature vs Motor Current Correlation</div>
+                <canvas id="tempCurrentChart" width="400" height="300"></canvas>
             </div>
 
             <div class="chart-container">
-                <div class="chart-title">Vibration Analysis Over Time</div>
-                <canvas id="vibrationChart" width="400" height="300"></canvas>
+                <div class="chart-title">Motor Power Consumption Analysis</div>
+                <canvas id="powerChart" width="400" height="300"></canvas>
             </div>
 
             <div class="chart-container">
-                <div class="chart-title">Environmental Conditions</div>
-                <canvas id="environmentChart" width="400" height="300"></canvas>
+                <div class="chart-title">Vibration vs Current Pattern</div>
+                <canvas id="vibCurrentChart" width="400" height="300"></canvas>
             </div>
 
             <div class="chart-container">
-                <div class="chart-title">Fault Events Timeline</div>
-                <canvas id="faultChart" width="400" height="300"></canvas>
+                <div class="chart-title">Motor Efficiency Analysis</div>
+                <canvas id="efficiencyChart" width="400" height="300"></canvas>
             </div>
         </div>
 
-        <!-- Correlation Matrix -->
+        <!-- Enhanced Correlation Matrix -->
         <div class="chart-container full-width correlation-matrix">
-            <div class="chart-title">Sensor Correlation Matrix</div>
+            <div class="chart-title">Enhanced Sensor Correlation Matrix (Including Current)</div>
             <div id="correlationMatrix">
                 <div class="loading">Loading correlation data...</div>
             </div>
@@ -637,12 +654,14 @@
                             <th>Pressure (hPa)</th>
                             <th>Vibration (m/s²)</th>
                             <th>Motor Speed (%)</th>
+                            <th>Current (A)</th>
+                            <th>Power (W)</th>
                             <th>Status</th>
                         </tr>
                     </thead>
                     <tbody id="dataTableBody">
                         <tr>
-                            <td colspan="7" class="loading">Loading analytics data...</td>
+                            <td colspan="9" class="loading">Loading analytics data...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -653,7 +672,7 @@
         <!-- Export Section -->
         <div class="export-section">
             <h3>📋 Data Export Options</h3>
-            <p>Export your analytics data for further analysis in external tools</p>
+            <p>Export your enhanced analytics data including current monitoring for further analysis</p>
             <div class="export-buttons">
                 <button class="btn btn-secondary" onclick="exportData('csv')">📊 Export as CSV</button>
                 <button class="btn btn-primary" onclick="exportData('json')">📄 Export as JSON</button>
@@ -673,8 +692,8 @@
             initializeDateInputs();
             loadAnalytics();
             
-            console.log('📊 Analytics Dashboard initialized');
-            console.log('🎯 Professional motor monitoring analytics ready');
+            console.log('📊 Enhanced Analytics Dashboard with Current Monitoring initialized');
+            console.log('🎯 Professional motor monitoring analytics with current sensing ready');
         });
 
         // Initialize date inputs with default values
@@ -714,7 +733,7 @@
 
         // Main analytics loading function
         async function loadAnalytics() {
-            showStatus('Loading analytics data...', 'loading');
+            showStatus('Loading enhanced analytics data...', 'loading');
             
             try {
                 // Load statistics
@@ -729,7 +748,7 @@
                 // Load data table
                 await loadDataTable();
                 
-                showStatus('Analytics loaded successfully!', 'success');
+                showStatus('Enhanced analytics loaded successfully!', 'success');
                 setTimeout(() => hideStatus(), 2000);
                 
             } catch (error) {
@@ -739,7 +758,7 @@
             }
         }
 
-        // Load statistics overview
+        // Load enhanced statistics overview
         async function loadStatistics() {
             try {
                 const startDate = document.getElementById('startDate').value;
@@ -755,10 +774,17 @@
                 document.getElementById('avgTemperature').textContent = `${(stats.avgTemperature || 0).toFixed(1)}°C`;
                 document.getElementById('avgVibration').textContent = (stats.avgVibration || 0).toFixed(3);
                 document.getElementById('avgMotorSpeed').textContent = `${Math.round(stats.avgMotorSpeed || 0)}%`;
-                document.getElementById('faultRate').textContent = `${(stats.temperatureFaultRate || 0).toFixed(1)}%`;
-                document.getElementById('maxVibration').textContent = (stats.maxVibration || 0).toFixed(3);
                 
-                console.log('📊 Statistics loaded:', stats);
+                // NEW: Current monitoring statistics
+                document.getElementById('avgMotorCurrent').textContent = `${(stats.avgMotorCurrent || 0).toFixed(2)} A`;
+                document.getElementById('avgMotorPower').textContent = `${(stats.avgMotorPower || 0).toFixed(1)} W`;
+                document.getElementById('maxMotorCurrent').textContent = `${(stats.maxMotorCurrent || 0).toFixed(2)} A`;
+                document.getElementById('totalEnergyConsumed').textContent = `${(stats.totalEnergyConsumed || 0).toFixed(3)} Ah`;
+                
+                document.getElementById('faultRate').textContent = `${(stats.temperatureFaultRate || 0).toFixed(1)}%`;
+                document.getElementById('currentFaultRate').textContent = `${(stats.currentFaultRate || 0).toFixed(1)}%`;
+                
+                console.log('📊 Enhanced statistics with current data loaded:', stats);
                 
             } catch (error) {
                 console.error('❌ Error loading statistics:', error);
@@ -766,7 +792,7 @@
             }
         }
 
-        // Load charts data
+        // Load enhanced charts data
         async function loadChartsData() {
             try {
                 const startDate = document.getElementById('startDate').value;
@@ -779,13 +805,13 @@
                 const result = await response.json();
                 currentData = result.data;
                 
-                // Create charts
-                createTempMotorChart(currentData);
-                createVibrationChart(currentData);
-                createEnvironmentChart(currentData);
-                createFaultChart(currentData);
+                // Create enhanced charts
+                createTempCurrentChart(currentData);
+                createPowerChart(currentData);
+                createVibCurrentChart(currentData);
+                createEfficiencyChart(currentData);
                 
-                console.log('📊 Charts data loaded:', result);
+                console.log('📊 Enhanced charts data with current monitoring loaded:', result);
                 
             } catch (error) {
                 console.error('❌ Error loading charts data:', error);
@@ -793,7 +819,7 @@
             }
         }
 
-        // Load correlation matrix
+        // Load enhanced correlation matrix
         async function loadCorrelationMatrix() {
             try {
                 const startDate = document.getElementById('startDate').value;
@@ -804,8 +830,8 @@
                 
                 const result = await response.json();
                 
-                displayCorrelationMatrix(result.correlations);
-                console.log('📊 Correlation matrix loaded:', result);
+                displayEnhancedCorrelationMatrix(result.correlations);
+                console.log('📊 Enhanced correlation matrix with current data loaded:', result);
                 
             } catch (error) {
                 console.error('❌ Error loading correlation matrix:', error);
@@ -814,53 +840,30 @@
             }
         }
 
-        // Load data table
-        async function loadDataTable(page = 1) {
-            try {
-                const startDate = document.getElementById('startDate').value;
-                const endDate = document.getElementById('endDate').value;
-                const aggregation = document.getElementById('aggregation').value;
-                
-                const response = await fetch(`/api/analytics/data?startDate=${startDate}&endDate=${endDate}&aggregation=${aggregation}&page=${page}&limit=20`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const result = await response.json();
-                
-                displayDataTable(result.data, result.pagination);
-                updatePagination(result.pagination);
-                
-                console.log('📊 Data table loaded:', result);
-                
-            } catch (error) {
-                console.error('❌ Error loading data table:', error);
-                document.getElementById('dataTableBody').innerHTML = 
-                    '<tr><td colspan="7" class="error">Error loading table data</td></tr>';
-            }
-        }
+        // Enhanced charts creation functions
 
-        // Create temperature vs motor speed chart
-        function createTempMotorChart(data) {
-            const ctx = document.getElementById('tempMotorChart').getContext('2d');
+        // Create temperature vs current chart
+        function createTempCurrentChart(data) {
+            const ctx = document.getElementById('tempCurrentChart').getContext('2d');
             
-            // Destroy existing chart
-            if (charts.tempMotor) {
-                charts.tempMotor.destroy();
+            if (charts.tempCurrent) {
+                charts.tempCurrent.destroy();
             }
             
             const chartData = {
                 datasets: [{
-                    label: 'Temp vs Motor Speed',
+                    label: 'Temp vs Current',
                     data: data.map(d => ({
                         x: d.temperature || d.avg_temperature || 0,
-                        y: d.motor_speed || d.avg_motor_speed || 0
+                        y: d.motor_current || d.avg_motor_current || 0
                     })),
-                    backgroundColor: 'rgba(0, 255, 136, 0.6)',
-                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(255, 235, 59, 0.6)',
+                    borderColor: '#ffeb3b',
                     borderWidth: 1
                 }]
             };
             
-            charts.tempMotor = new Chart(ctx, {
+            charts.tempCurrent = new Chart(ctx, {
                 type: 'scatter',
                 data: chartData,
                 options: {
@@ -877,30 +880,30 @@
                         y: {
                             grid: { color: 'rgba(255, 255, 255, 0.1)' },
                             ticks: { color: '#ffffff' },
-                            title: { display: true, text: 'Motor Speed (%)', color: '#ffffff' }
+                            title: { display: true, text: 'Current (A)', color: '#ffffff' }
                         }
                     }
                 }
             });
         }
 
-        // Create vibration analysis chart
-        function createVibrationChart(data) {
-            const ctx = document.getElementById('vibrationChart').getContext('2d');
+        // Create power consumption chart
+        function createPowerChart(data) {
+            const ctx = document.getElementById('powerChart').getContext('2d');
             
-            if (charts.vibration) {
-                charts.vibration.destroy();
+            if (charts.power) {
+                charts.power.destroy();
             }
             
-            charts.vibration = new Chart(ctx, {
+            charts.power = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: data.map((d, index) => index + 1),
                     datasets: [{
-                        label: 'Vibration (m/s²)',
-                        data: data.map(d => d.vibration || d.avg_vibration || 0),
-                        borderColor: '#ffeb3b',
-                        backgroundColor: 'rgba(255, 235, 59, 0.1)',
+                        label: 'Motor Power (W)',
+                        data: data.map(d => d.motor_power || d.avg_motor_power || 0),
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
                         tension: 0.4,
                         fill: true
                     }]
@@ -911,49 +914,45 @@
                         legend: { labels: { color: '#ffffff' } }
                     },
                     scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: { display: true, text: 'Power (W)', color: '#ffffff' }
+                        },
                         x: {
                             grid: { color: 'rgba(255, 255, 255, 0.1)' },
                             ticks: { color: '#ffffff' }
-                        },
-                        y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                            ticks: { color: '#ffffff' },
-                            title: { display: true, text: 'Vibration (m/s²)', color: '#ffffff' }
                         }
                     }
                 }
             });
         }
 
-        // Create environment conditions chart
-        function createEnvironmentChart(data) {
-            const ctx = document.getElementById('environmentChart').getContext('2d');
+        // Create vibration vs current chart
+        function createVibCurrentChart(data) {
+            const ctx = document.getElementById('vibCurrentChart').getContext('2d');
             
-            if (charts.environment) {
-                charts.environment.destroy();
+            if (charts.vibCurrent) {
+                charts.vibCurrent.destroy();
             }
             
-            charts.environment = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map((d, index) => index + 1),
-                    datasets: [
-                        {
-                            label: 'Humidity (%)',
-                            data: data.map(d => d.humidity || d.avg_humidity || 0),
-                            borderColor: '#2196F3',
-                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Pressure (hPa)',
-                            data: data.map(d => d.pressure || d.avg_pressure || 0),
-                            borderColor: '#FF9800',
-                            backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                            yAxisID: 'y1'
-                        }
-                    ]
-                },
+            const chartData = {
+                datasets: [{
+                    label: 'Vibration vs Current',
+                    data: data.map(d => ({
+                        x: d.vibration || d.avg_vibration || 0,
+                        y: d.motor_current || d.avg_motor_current || 0
+                    })),
+                    backgroundColor: 'rgba(156, 39, 176, 0.6)',
+                    borderColor: '#9c27b0',
+                    borderWidth: 1
+                }]
+            };
+            
+            charts.vibCurrent = new Chart(ctx, {
+                type: 'scatter',
+                data: chartData,
                 options: {
                     responsive: true,
                     plugins: {
@@ -962,49 +961,45 @@
                     scales: {
                         x: {
                             grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                            ticks: { color: '#ffffff' }
+                            ticks: { color: '#ffffff' },
+                            title: { display: true, text: 'Vibration (m/s²)', color: '#ffffff' }
                         },
                         y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
                             grid: { color: 'rgba(255, 255, 255, 0.1)' },
                             ticks: { color: '#ffffff' },
-                            title: { display: true, text: 'Humidity (%)', color: '#2196F3' }
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            grid: { drawOnChartArea: false },
-                            ticks: { color: '#ffffff' },
-                            title: { display: true, text: 'Pressure (hPa)', color: '#FF9800' }
+                            title: { display: true, text: 'Current (A)', color: '#ffffff' }
                         }
                     }
                 }
             });
         }
 
-        // Create fault events chart
-        function createFaultChart(data) {
-            const ctx = document.getElementById('faultChart').getContext('2d');
+        // Create efficiency analysis chart
+        function createEfficiencyChart(data) {
+            const ctx = document.getElementById('efficiencyChart').getContext('2d');
             
-            if (charts.fault) {
-                charts.fault.destroy();
+            if (charts.efficiency) {
+                charts.efficiency.destroy();
             }
             
-            const faultData = data.map(d => d.fault_count || 0);
+            // Calculate efficiency (Speed/Power ratio)
+            const efficiencyData = data.map(d => {
+                const speed = d.motor_speed || d.avg_motor_speed || 0;
+                const power = d.motor_power || d.avg_motor_power || 0;
+                return power > 0 ? speed / power : 0;
+            });
             
-            charts.fault = new Chart(ctx, {
-                type: 'bar',
+            charts.efficiency = new Chart(ctx, {
+                type: 'line',
                 data: {
                     labels: data.map((d, index) => index + 1),
                     datasets: [{
-                        label: 'Fault Events',
-                        data: faultData,
-                        backgroundColor: 'rgba(244, 67, 54, 0.6)',
-                        borderColor: '#F44336',
-                        borderWidth: 1
+                        label: 'Motor Efficiency (Speed/Power)',
+                        data: efficiencyData,
+                        borderColor: '#4caf50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        tension: 0.4,
+                        fill: true
                     }]
                 },
                 options: {
@@ -1013,35 +1008,62 @@
                         legend: { labels: { color: '#ffffff' } }
                     },
                     scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: { display: true, text: 'Efficiency Ratio', color: '#ffffff' }
+                        },
                         x: {
                             grid: { color: 'rgba(255, 255, 255, 0.1)' },
                             ticks: { color: '#ffffff' }
-                        },
-                        y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                            ticks: { color: '#ffffff' },
-                            title: { display: true, text: 'Fault Count', color: '#ffffff' }
                         }
                     }
                 }
             });
         }
 
-        // Display correlation matrix
-        function displayCorrelationMatrix(correlations) {
+        // Load data table
+        async function loadDataTable(page = 1) {
+            try {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const aggregation = document.getElementById('aggregation').value;
+                
+                const response = await fetch(`/api/analytics/data?startDate=${startDate}&endDate=${endDate}&aggregation=${aggregation}&page=${page}&limit=20`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const result = await response.json();
+                
+                displayEnhancedDataTable(result.data, result.pagination);
+                updatePagination(result.pagination);
+                
+                console.log('📊 Enhanced data table loaded:', result);
+                
+            } catch (error) {
+                console.error('❌ Error loading data table:', error);
+                document.getElementById('dataTableBody').innerHTML = 
+                    '<tr><td colspan="9" class="error">Error loading table data</td></tr>';
+            }
+        }
+
+        // Display enhanced correlation matrix
+        function displayEnhancedCorrelationMatrix(correlations) {
             if (!correlations) {
                 document.getElementById('correlationMatrix').innerHTML = 
                     '<div class="error">No correlation data available</div>';
                 return;
             }
 
-            const sensors = ['temperature', 'humidity', 'pressure', 'vibration', 'motor_speed'];
+            const sensors = ['temperature', 'humidity', 'pressure', 'vibration', 'motor_speed', 'motor_current', 'motor_power'];
             const sensorLabels = {
                 temperature: 'Temperature',
                 humidity: 'Humidity',
                 pressure: 'Pressure',
                 vibration: 'Vibration',
-                motor_speed: 'Motor Speed'
+                motor_speed: 'Motor Speed',
+                motor_current: 'Motor Current',
+                motor_power: 'Motor Power'
             };
 
             let html = '<table class="correlation-table"><thead><tr><th></th>';
@@ -1078,12 +1100,12 @@
             document.getElementById('correlationMatrix').innerHTML = html;
         }
 
-        // Display data table
-        function displayDataTable(data, pagination) {
+        // Display enhanced data table
+        function displayEnhancedDataTable(data, pagination) {
             const tableBody = document.getElementById('dataTableBody');
             
             if (!data || data.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No data available</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No data available</td></tr>';
                 return;
             }
 
@@ -1100,7 +1122,9 @@
                         <td>${(row.pressure || row.avg_pressure || 0).toFixed(1)}</td>
                         <td>${(row.vibration || row.avg_vibration || 0).toFixed(3)}</td>
                         <td>${Math.round(row.motor_speed || row.avg_motor_speed || 0)}</td>
-                        <td>${row.temp_status || row.vib_status || 'Normal'}</td>
+                        <td>${(row.motor_current || row.avg_motor_current || 0).toFixed(2)}</td>
+                        <td>${(row.motor_power || row.avg_motor_power || 0).toFixed(1)}</td>
+                        <td>${row.temp_status || row.vib_status || row.current_status || 'Normal'}</td>
                     </tr>
                 `;
             });
@@ -1152,10 +1176,10 @@
             loadAnalytics();
         }
 
-        // Export data
+        // Enhanced export data
         async function exportData(format) {
             try {
-                showStatus(`Exporting data as ${format.toUpperCase()}...`, 'loading');
+                showStatus(`Exporting enhanced data as ${format.toUpperCase()}...`, 'loading');
                 
                 const startDate = document.getElementById('startDate').value;
                 const endDate = document.getElementById('endDate').value;
@@ -1165,12 +1189,12 @@
                 // Create a temporary link and click it to download
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `motor_analytics_${new Date().toISOString().split('T')[0]}.${format}`;
+                link.download = `motor_analytics_with_current_${new Date().toISOString().split('T')[0]}.${format}`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 
-                showStatus(`Data exported successfully as ${format.toUpperCase()}!`, 'success');
+                showStatus(`Enhanced data exported successfully as ${format.toUpperCase()}!`, 'success');
                 setTimeout(() => hideStatus(), 2000);
                 
             } catch (error) {
@@ -1192,9 +1216,11 @@
             document.getElementById('statusIndicator').style.display = 'none';
         }
 
-        console.log('📊 Analytics Dashboard Script Loaded');
-        console.log('🎯 Professional motor monitoring analytics ready');
-        console.log('📈 Features: Statistics, Charts, Correlations, Data Export');
+        console.log('📊 Enhanced Analytics Dashboard with Current Monitoring Script Loaded');
+        console.log('🎯 Professional motor monitoring analytics with current sensing ready');
+        console.log('📈 Features: Statistics, Charts, Correlations, Current Analysis, Data Export');
+        console.log('⚡ Current sensor integration: ACS712 Hall Effect Sensor');
+        console.log('🔋 Power monitoring: Real-time current, power, and energy analysis');
     </script>
 </body>
 </html>

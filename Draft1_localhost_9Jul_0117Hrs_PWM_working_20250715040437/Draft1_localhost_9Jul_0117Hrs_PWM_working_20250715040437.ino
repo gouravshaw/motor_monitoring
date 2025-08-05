@@ -12,7 +12,7 @@ const char* ssid = "shaw";
 const char* password = "1234567890";
 
 // MQTT settings
-const char* mqtt_server = "10.225.203.34";  // Your Ubuntu IP
+const char* mqtt_server = "10.72.124.34"; 
 const int mqtt_port = 1883;
 const char* mqtt_client_id = "ESP32_Motor_Monitor";
 
@@ -33,6 +33,22 @@ const int daylightOffset_sec = 3600;
 #define MOTOR_LPWM  26    // LPWM pin (Reverse)
 #define MOTOR_L_EN  14    // L_EN pin
 
+// *** ACS712 Current Sensor Pin ***
+#define CURRENT_SENSOR_PIN  34    // GPIO34 (ADC1_CH6) for ACS712 OUT
+
+// ACS712 Configuration (ACS712-30A)
+const float ACS712_SENSITIVITY = 0.066;  // 66mV/A for ACS712-30A
+const float ACS712_ZERO_CURRENT_VOLTAGE = 1.65;  // 1.65V at 0A (for 3.3V supply)
+const int ADC_RESOLUTION = 4095;  // 12-bit ADC
+const float ADC_VOLTAGE_REF = 3.3;  // ESP32 ADC reference voltage
+
+// Current sensor calibration and filtering
+float currentOffset = 0.0;  // Calibration offset
+const int CURRENT_SAMPLES = 10;  // Number of samples for averaging
+float currentReadings[CURRENT_SAMPLES];
+int currentSampleIndex = 0;
+bool currentSamplesReady = false;
+
 // Motor control variables
 int currentMotorSpeed = 100;        // Current speed percentage (0-100)
 String currentDirection = "forward"; // "forward", "reverse", "stopped"
@@ -43,6 +59,13 @@ unsigned long transitionStartTime = 0;
 int targetSpeed = 100;
 String targetDirection = "forward";
 bool isTransitioning = false;
+
+// Current monitoring variables
+float currentCurrent = 0.0;         // Current motor current in Amperes
+float maxCurrent = 0.0;             // Peak current since startup
+float totalEnergy = 0.0;            // Total energy consumed (Ah)
+unsigned long lastEnergyUpdate = 0;
+String currentStatus = "NORMAL";    // "NORMAL", "HIGH", "OVERLOAD", "FAULT"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -61,6 +84,11 @@ struct SensorReading {
   int motor_speed;
   String motor_direction;
   String motor_status;
+  float motor_current;        // Added current measurement
+  float motor_power;          // Added power calculation
+  String current_status;      // Added current status
+  float max_current;          // Added peak current
+  float total_energy;         // Added energy consumption
 };
 
 void setup() {
@@ -68,11 +96,14 @@ void setup() {
   delay(2000);
   
   Serial.println("╔═══════════════════════════════════════════════╗");
-  Serial.println("║    ESP32 ENHANCED MQTT MOTOR MONITOR          ║");
+  Serial.println("║   ESP32 ENHANCED MQTT MOTOR MONITOR + ACS712  ║");
   Serial.println("║  Student: Gourav Shaw (T0436800)              ║");
-  Serial.println("║  Enhanced MQTT + BTS7960 Motor Control        ║");
+  Serial.println("║  Enhanced MQTT + BTS7960 + Current Sensing    ║");
   Serial.println("╚═══════════════════════════════════════════════╝");
   Serial.println("");
+  
+  // Initialize current sensor
+  setupCurrentSensor();
   
   // Initialize motor control pins
   setupMotorControl();
@@ -107,9 +138,10 @@ void setup() {
   Serial.println("✅ MPU6050 initialized");
   
   Serial.println("");
-  Serial.println("🎯 Starting enhanced MQTT motor monitoring...");
+  Serial.println("🎯 Starting enhanced MQTT motor monitoring with current sensing...");
   Serial.println("📡 Publishing to: " + String(topic_sensors));
   Serial.println("🎮 Motor control ready via: " + String(topic_control));
+  Serial.println("⚡ Current monitoring active on GPIO34");
   Serial.println("");
 }
 
@@ -120,8 +152,14 @@ void loop() {
   }
   client.loop();
   
+  // Read and process current sensor continuously
+  updateCurrentReading();
+  
   // Handle motor transitions
   handleMotorTransitions();
+  
+  // Update energy calculation
+  updateEnergyCalculation();
   
   // Read sensor data and publish every 5 seconds
   static unsigned long lastSensorRead = 0;
@@ -130,13 +168,136 @@ void loop() {
     displayLocalData(data);
     publishSensorData(data);
     
-    // Check for automatic fault-based motor control
+    // Check for automatic fault-based motor control (including current)
     checkAutomaticFaultResponse(data);
     
     lastSensorRead = millis();
   }
   
   delay(100); // Small delay for responsiveness
+}
+
+void setupCurrentSensor() {
+  Serial.println("⚡ Initializing ACS712 Current Sensor...");
+  
+  // Configure ADC for current sensor
+  analogSetAttenuation(ADC_11db);  // 0-3.3V range
+  analogReadResolution(12);        // 12-bit resolution
+  
+  // Initialize current readings array
+  for (int i = 0; i < CURRENT_SAMPLES; i++) {
+    currentReadings[i] = 0.0;
+  }
+  
+  // Calibrate zero current offset
+  delay(1000);  // Let system stabilize
+  calibrateCurrentSensor();
+  
+  Serial.println("✅ ACS712 Current Sensor initialized");
+  Serial.println("⚡ Sensitivity: " + String(ACS712_SENSITIVITY) + " V/A");
+  Serial.println("⚡ Zero current voltage: " + String(ACS712_ZERO_CURRENT_VOLTAGE) + " V");
+  Serial.println("⚡ Calibration offset: " + String(currentOffset) + " V");
+}
+
+void calibrateCurrentSensor() {
+  Serial.println("🔧 Calibrating current sensor (ensure motor is stopped)...");
+  
+  float sum = 0.0;
+  const int calibrationSamples = 100;
+  
+  for (int i = 0; i < calibrationSamples; i++) {
+    int rawValue = analogRead(CURRENT_SENSOR_PIN);
+    float voltage = (rawValue / float(ADC_RESOLUTION)) * ADC_VOLTAGE_REF;
+    sum += voltage;
+    delay(10);
+  }
+  
+  float averageVoltage = sum / calibrationSamples;
+  currentOffset = averageVoltage - ACS712_ZERO_CURRENT_VOLTAGE;
+  
+  Serial.println("✅ Calibration complete");
+  Serial.println("⚡ Measured zero voltage: " + String(averageVoltage) + " V");
+  Serial.println("⚡ Calculated offset: " + String(currentOffset) + " V");
+}
+
+void updateCurrentReading() {
+  // Read ADC value
+  int rawValue = analogRead(CURRENT_SENSOR_PIN);
+  
+  // Convert to voltage
+  float voltage = (rawValue / float(ADC_RESOLUTION)) * ADC_VOLTAGE_REF;
+  
+  // Apply calibration offset
+  voltage -= currentOffset;
+  
+  // Convert voltage to current using ACS712 sensitivity
+  float current = (voltage - ACS712_ZERO_CURRENT_VOLTAGE) / ACS712_SENSITIVITY;
+  
+  // Take absolute value (bidirectional current measurement)
+  current = abs(current);
+  
+  // Add to moving average filter
+  currentReadings[currentSampleIndex] = current;
+  currentSampleIndex = (currentSampleIndex + 1) % CURRENT_SAMPLES;
+  
+  if (currentSampleIndex == 0) {
+    currentSamplesReady = true;
+  }
+  
+  // Calculate filtered current (moving average)
+  if (currentSamplesReady) {
+    float sum = 0.0;
+    for (int i = 0; i < CURRENT_SAMPLES; i++) {
+      sum += currentReadings[i];
+    }
+    currentCurrent = sum / CURRENT_SAMPLES;
+  } else {
+    // Use simple average until we have enough samples
+    float sum = 0.0;
+    for (int i = 0; i <= currentSampleIndex; i++) {
+      sum += currentReadings[i];
+    }
+    currentCurrent = sum / (currentSampleIndex + 1);
+  }
+  
+  // Update peak current
+  if (currentCurrent > maxCurrent) {
+    maxCurrent = currentCurrent;
+  }
+  
+  // Update current status
+  updateCurrentStatus();
+}
+
+void updateCurrentStatus() {
+  if (currentCurrent < 0.1) {
+    currentStatus = "IDLE";
+  } else if (currentCurrent < 15.0) {
+    currentStatus = "NORMAL";
+  } else if (currentCurrent < 25.0) {
+    currentStatus = "HIGH";
+  } else if (currentCurrent < 30.0) {
+    currentStatus = "OVERLOAD";
+  } else {
+    currentStatus = "FAULT";
+  }
+}
+
+void updateEnergyCalculation() {
+  unsigned long currentTime = millis();
+  
+  if (lastEnergyUpdate == 0) {
+    lastEnergyUpdate = currentTime;
+    return;
+  }
+  
+  unsigned long deltaTime = currentTime - lastEnergyUpdate;
+  float deltaHours = deltaTime / 3600000.0;  // Convert ms to hours
+  
+  // Add current consumption to total energy (Amp-hours)
+  totalEnergy += currentCurrent * deltaHours;
+  
+  lastEnergyUpdate = currentTime;
 }
 
 void setupMotorControl() {
@@ -202,7 +363,7 @@ void reconnectMQTT() {
       Serial.println("📡 Subscribed to: " + String(topic_control));
       
       // Publish status with motor info
-      publishMotorStatus("ESP32 Enhanced Motor Monitor Online");
+      publishMotorStatus("ESP32 Enhanced Motor Monitor with Current Sensing Online");
       
     } else {
       Serial.print(" failed, rc=");
@@ -410,11 +571,26 @@ void emergencyStop() {
 }
 
 void checkAutomaticFaultResponse(SensorReading data) {
-  // Automatic fault-based motor control
+  // Enhanced automatic fault-based motor control (including current)
   if (!motorEnabled) return; // Don't interfere if manually disabled
   
   bool faultDetected = false;
   String faultReason = "";
+  
+  // Current-based control (NEW!)
+  if (data.motor_current > 30.0) {
+    emergencyStop();
+    faultReason = "Critical current: " + String(data.motor_current) + " A";
+    faultDetected = true;
+  } else if (data.motor_current > 25.0 && currentMotorSpeed > 25) {
+    emergencyStop();
+    faultReason = "Overcurrent protection: " + String(data.motor_current) + " A";
+    faultDetected = true;
+  } else if (data.motor_current > 20.0 && currentMotorSpeed > 50) {
+    startGradualTransition(50, currentDirection);
+    faultReason = "High current: reducing speed to 50%";
+    faultDetected = true;
+  }
   
   // Temperature-based control
   if (data.temperature > 45.0) {
@@ -436,6 +612,16 @@ void checkAutomaticFaultResponse(SensorReading data) {
     startGradualTransition(75, currentDirection);
     faultReason = "High vibration: reducing speed to 75%";
     faultDetected = true;
+  }
+  
+  // Power efficiency check (NEW!)
+  if (data.motor_power > 0 && currentMotorSpeed > 0) {
+    float powerPerSpeed = data.motor_power / currentMotorSpeed;
+    if (powerPerSpeed > 5.0 && currentMotorSpeed > 25) {  // High power per speed ratio
+      startGradualTransition(currentMotorSpeed - 25, currentDirection);
+      faultReason = "Poor efficiency: reducing speed for optimization";
+      faultDetected = true;
+    }
   }
   
   if (faultDetected) {
@@ -509,12 +695,19 @@ SensorReading readSensorData() {
   data.motor_direction = currentDirection;
   data.motor_status = motorStatus;
   
+  // Include current sensor data (NEW!)
+  data.motor_current = currentCurrent;
+  data.motor_power = currentCurrent * 12.0;  // P = I × V (assuming 12V)
+  data.current_status = currentStatus;
+  data.max_current = maxCurrent;
+  data.total_energy = totalEnergy;
+  
   return data;
 }
 
 void publishSensorData(SensorReading data) {
-  // Create enhanced JSON payload with motor data
-  StaticJsonDocument<400> jsonDoc;
+  // Create enhanced JSON payload with motor and current data
+  StaticJsonDocument<500> jsonDoc;
   jsonDoc["timestamp"] = data.timestamp;
   jsonDoc["temperature"] = round(data.temperature * 10) / 10.0;
   jsonDoc["humidity"] = round(data.humidity * 10) / 10.0;
@@ -532,6 +725,13 @@ void publishSensorData(SensorReading data) {
   jsonDoc["motor_status"] = data.motor_status;
   jsonDoc["motor_enabled"] = motorEnabled;
   jsonDoc["is_transitioning"] = isTransitioning;
+  
+  // Current sensor data (NEW!)
+  jsonDoc["motor_current"] = round(data.motor_current * 100) / 100.0;
+  jsonDoc["motor_power"] = round(data.motor_power * 100) / 100.0;
+  jsonDoc["current_status"] = data.current_status;
+  jsonDoc["max_current"] = round(data.max_current * 100) / 100.0;
+  jsonDoc["total_energy"] = round(data.total_energy * 1000) / 1000.0;
   
   jsonDoc["device_id"] = "ESP32_001";
   
@@ -553,12 +753,14 @@ void publishSensorData(SensorReading data) {
 }
 
 void publishMotorStatus(String message) {
-  StaticJsonDocument<200> statusDoc;
+  StaticJsonDocument<250> statusDoc;
   statusDoc["message"] = message;
   statusDoc["motor_speed"] = currentMotorSpeed;
   statusDoc["motor_direction"] = currentDirection;
   statusDoc["motor_status"] = motorStatus;
   statusDoc["motor_enabled"] = motorEnabled;
+  statusDoc["motor_current"] = round(currentCurrent * 100) / 100.0;
+  statusDoc["current_status"] = currentStatus;
   statusDoc["timestamp"] = millis();
   
   String statusString;
@@ -568,11 +770,13 @@ void publishMotorStatus(String message) {
 }
 
 void publishMotorFeedback(String feedback) {
-  StaticJsonDocument<150> feedbackDoc;
+  StaticJsonDocument<200> feedbackDoc;
   feedbackDoc["feedback"] = feedback;
   feedbackDoc["motor_speed"] = currentMotorSpeed;
   feedbackDoc["motor_direction"] = currentDirection;
   feedbackDoc["motor_status"] = motorStatus;
+  feedbackDoc["motor_current"] = round(currentCurrent * 100) / 100.0;
+  feedbackDoc["current_status"] = currentStatus;
   feedbackDoc["timestamp"] = millis();
   
   String feedbackString;
@@ -603,7 +807,7 @@ void displayLocalData(SensorReading data) {
   Serial.print(data.pressure, 1);
   Serial.println(" hPa");
   
-  // Motor status display
+  // Enhanced motor status display with current data
   Serial.println("┌─── MOTOR STATUS ────────────────────────────┐");
   Serial.print("⚙️  Speed: ");
   Serial.print(data.motor_speed);
@@ -611,6 +815,32 @@ void displayLocalData(SensorReading data) {
   Serial.print(data.motor_direction);
   Serial.print(" | Status: ");
   Serial.println(data.motor_status);
+  
+  // Current monitoring display (NEW!)
+  Serial.println("┌─── CURRENT MONITORING ──────────────────────┐");
+  Serial.print("⚡ Current: ");
+  Serial.print(data.motor_current, 2);
+  Serial.print(" A | Power: ");
+  Serial.print(data.motor_power, 1);
+  Serial.print(" W | Status: ");
+  Serial.println(data.current_status);
+  
+  Serial.print("📈 Peak Current: ");
+  Serial.print(data.max_current, 2);
+  Serial.print(" A | Energy: ");
+  Serial.print(data.total_energy, 3);
+  Serial.println(" Ah");
+  
+  // Power efficiency calculation
+  if (data.motor_speed > 0 && data.motor_power > 0) {
+    float efficiency = (data.motor_speed / 100.0) / (data.motor_power / 100.0);
+    Serial.print("🔋 Efficiency: ");
+    Serial.print(efficiency, 2);
+    Serial.print(" | Power/Speed: ");
+    Serial.print(data.motor_power / data.motor_speed, 1);
+    Serial.println(" W/%");
+  }
+  Serial.println("└─────────────────────────────────────────────┘");
   
   if (isTransitioning) {
     Serial.print("🔄 Transitioning to: ");

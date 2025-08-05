@@ -366,6 +366,13 @@
             animation: blink 1s infinite;
         }
 
+        /* NEW: Current sensor status styles */
+        .current-status-idle { background: #607D8B; color: white; }
+        .current-status-normal { background: #4CAF50; color: white; }
+        .current-status-high { background: #FF9800; color: white; }
+        .current-status-overload { background: #F44336; color: white; }
+        .current-status-fault { background: #9C27B0; color: white; animation: blink 1s infinite; }
+
         @keyframes blink {
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0.5; }
@@ -613,7 +620,7 @@
     <div class="header">
         <a href="/analytics" class="analytics-btn">📊 Analytics Dashboard</a>
         <h1>⚙️ Motor Control Dashboard</h1>
-        <p>Real-time IoT Motor Monitoring with PWM Control</p>
+        <p>Real-time IoT Motor Monitoring with Current Sensing & PWM Control</p>
     </div>
 
     <div class="container">
@@ -748,6 +755,14 @@
                 <div class="card-status" id="vibStatus">Loading...</div>
             </div>
 
+            <!-- NEW: Current Status Card -->
+            <div class="card" id="currentCard">
+                <div class="card-icon">⚡</div>
+                <div class="card-value" id="currentValue">--</div>
+                <div class="card-label">Motor Current (A)</div>
+                <div class="card-status" id="currentStatus">Loading...</div>
+            </div>
+
             <div class="card" id="humCard">
                 <div class="card-icon">💧</div>
                 <div class="card-value" id="humValue">--</div>
@@ -773,10 +788,12 @@
 
             <div class="chart-container">
                 <button class="chart-analyze-btn" onclick="window.open('/analytics', '_blank')">📊 Analyze</button>
-                <div class="chart-title">Vibration Pattern</div>
-                <canvas id="vibChart" width="400" height="200"></canvas>
+                <div class="chart-title">Motor Current Pattern</div>
+                <canvas id="currentChart" width="400" height="200"></canvas>
             </div>
         </div>
+
+        
 
         <!-- Data Table -->
         <div class="data-table">
@@ -787,6 +804,7 @@
                         <th>Time</th>
                         <th>Temperature</th>
                         <th>Vibration</th>
+                        <th>Current</th>
                         <th>Motor Speed</th>
                         <th>Direction</th>
                         <th>Status</th>
@@ -794,7 +812,7 @@
                 </thead>
                 <tbody id="dataTableBody">
                     <tr>
-                        <td colspan="6" style="text-align: center;">Loading data...</td>
+                        <td colspan="7" style="text-align: center;">Loading data...</td>
                     </tr>
                 </tbody>
             </table>
@@ -807,10 +825,11 @@
 
     <script>
         // Global variables
-        let tempChart, vibChart;
+        let tempChart, currentChart;
         let tempData = [];
         let vibData = [];
         let motorSpeedData = [];
+        let currentData = [];
         let timeLabels = [];
         let isConnected = false;
         let noDataDisplayed = false;
@@ -928,7 +947,7 @@
             }, 3000);
         }
 
-        // Initialize charts with enhanced motor data
+        // Initialize charts with current monitoring
         function initCharts() {
             // Temperature & Motor Speed Chart
             const tempCtx = document.getElementById('tempChart').getContext('2d');
@@ -1015,15 +1034,15 @@
                 }
             });
 
-            // Vibration Chart
-            const vibCtx = document.getElementById('vibChart').getContext('2d');
-            vibChart = new Chart(vibCtx, {
+            // NEW: Current Chart
+            const currentCtx = document.getElementById('currentChart').getContext('2d');
+            currentChart = new Chart(currentCtx, {
                 type: 'line',
                 data: {
                     labels: timeLabels,
                     datasets: [{
-                        label: 'Vibration (m/s²)',
-                        data: vibData,
+                        label: 'Motor Current (A)',
+                        data: currentData,
                         borderColor: '#ffeb3b',
                         backgroundColor: 'rgba(255, 235, 59, 0.1)',
                         tension: 0.4,
@@ -1047,7 +1066,7 @@
                             ticks: { color: '#ffffff' },
                             title: {
                                 display: true,
-                                text: 'Vibration (m/s²)',
+                                text: 'Current (A)',
                                 color: '#ffffff'
                             }
                         },
@@ -1108,6 +1127,7 @@
             document.getElementById('vibValue').textContent = '--';
             document.getElementById('humValue').textContent = '--';
             document.getElementById('pressValue').textContent = '--';
+            document.getElementById('currentValue').textContent = '--';
             
             // Motor status
             document.getElementById('currentSpeed').textContent = '--';
@@ -1120,6 +1140,7 @@
             updateStatus('vibStatus', 'SYSTEM OFFLINE');
             updateStatus('humStatus', 'SYSTEM OFFLINE');
             updateStatus('pressStatus', 'SYSTEM OFFLINE');
+            updateCurrentStatus('currentStatus', 'OFFLINE');
             
             // Load recent readings from database when offline
             loadRecentReadings();
@@ -1132,6 +1153,9 @@
             document.getElementById('vibValue').textContent = data.vibration?.toFixed(3) || '--';
             document.getElementById('humValue').textContent = data.humidity?.toFixed(1) || '--';
             document.getElementById('pressValue').textContent = data.pressure?.toFixed(1) || '--';
+
+            // NEW: Update current monitoring display
+            document.getElementById('currentValue').textContent = data.motor_current?.toFixed(2) || '--';
 
             // Update motor status
             document.getElementById('currentSpeed').textContent = data.motor_speed || '--';
@@ -1146,10 +1170,12 @@
                 updateStatus('vibStatus', 'SYSTEM OFFLINE');
                 updateStatus('humStatus', 'SYSTEM OFFLINE');
                 updateStatus('pressStatus', 'SYSTEM OFFLINE');
+                updateCurrentStatus('currentStatus', 'OFFLINE');
                 
                 // Add stale indicator to all cards
                 document.getElementById('tempCard').classList.add('stale-indicator');
                 document.getElementById('vibCard').classList.add('stale-indicator');
+                document.getElementById('currentCard').classList.add('stale-indicator');
                 document.getElementById('humCard').classList.add('stale-indicator');
                 document.getElementById('pressCard').classList.add('stale-indicator');
             } else {
@@ -1157,10 +1183,12 @@
                 updateStatus('vibStatus', data.vib_status);
                 updateStatus('humStatus', 'Environmental');
                 updateStatus('pressStatus', 'Atmospheric');
+                updateCurrentStatus('currentStatus', data.current_status);
                 
                 // Remove stale indicator from all cards
                 document.getElementById('tempCard').classList.remove('stale-indicator');
                 document.getElementById('vibCard').classList.remove('stale-indicator');
+                document.getElementById('currentCard').classList.remove('stale-indicator');
                 document.getElementById('humCard').classList.remove('stale-indicator');
                 document.getElementById('pressCard').classList.remove('stale-indicator');
             }
@@ -1174,16 +1202,18 @@
                     tempData.shift();
                     vibData.shift();
                     motorSpeedData.shift();
+                    currentData.shift();
                     timeLabels.shift();
                 }
 
                 tempData.push(data.temperature);
                 vibData.push(data.vibration);
                 motorSpeedData.push(data.motor_speed || 0);
+                currentData.push(data.motor_current || 0);
                 timeLabels.push(currentTime);
 
                 tempChart.update();
-                vibChart.update();
+                currentChart.update();
             }
 
             // Update last update time
@@ -1201,17 +1231,51 @@
             }
         }
 
+        // NEW: Update current status function
+        function updateCurrentStatus(elementId, status) {
+            const element = document.getElementById(elementId);
+            element.textContent = status || 'Unknown';
+            
+            // Remove existing status classes
+            element.className = 'card-status';
+            
+            // Add appropriate status class
+            switch(status?.toLowerCase()) {
+                case 'idle':
+                    element.classList.add('current-status-idle');
+                    break;
+                case 'normal':
+                    element.classList.add('current-status-normal');
+                    break;
+                case 'high':
+                    element.classList.add('current-status-high');
+                    break;
+                case 'overload':
+                    element.classList.add('current-status-overload');
+                    break;
+                case 'fault':
+                    element.classList.add('current-status-fault');
+                    break;
+                case 'offline':
+                    element.classList.add('status-stale');
+                    break;
+                default:
+                    element.classList.add('status-normal');
+            }
+        }
+
         // Update data table (for live data)
         function updateDataTable(data) {
             const tableBody = document.getElementById('dataTableBody');
             const currentTime = new Date().toLocaleString();
             
-            // Create new row with motor data
+            // Create new row with current data
             const row = `
                 <tr>
                     <td>${currentTime}</td>
                     <td>${data.temperature?.toFixed(1) || '--'}°C</td>
                     <td>${data.vibration?.toFixed(3) || '--'} m/s²</td>
+                    <td>${data.motor_current?.toFixed(2) || '--'} A</td>
                     <td>${data.motor_speed || '--'}%</td>
                     <td>${data.motor_direction || '--'}</td>
                     <td>${data.temp_status || 'Unknown'} / ${data.vib_status || 'Unknown'}</td>
@@ -1244,7 +1308,7 @@
             } catch (error) {
                 console.error('❌ Error loading recent readings:', error);
                 const tableBody = document.getElementById('dataTableBody');
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">⚠️ Error loading historical data: ' + error.message + '</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">⚠️ Error loading historical data: ' + error.message + '</td></tr>';
             }
         }
 
@@ -1264,6 +1328,7 @@
                             <td>${readingTime}</td>
                             <td>${data.temperature?.toFixed(1) || '--'}°C</td>
                             <td>${data.vibration?.toFixed(3) || '--'} m/s²</td>
+                            <td>${data.motor_current?.toFixed(2) || '--'} A</td>
                             <td>${data.motor_speed || '--'}%</td>
                             <td>${data.motor_direction || '--'}</td>
                             <td>${data.temp_status || 'Unknown'} / ${data.vib_status || 'Unknown'}</td>
@@ -1271,9 +1336,9 @@
                     `;
                 });
                 tableBody.innerHTML = tableHTML;
-                console.log('✅ Table updated with historical data including motor info');
+                console.log('✅ Table updated with historical data including current info');
             } else {
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">📊 No historical data available</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">📊 No historical data available</td></tr>';
                 console.log('⚠️ No historical data to display');
             }
         }
@@ -1381,23 +1446,6 @@
             `;
         }
 
-        // Test function for debugging motor control
-        async function testMotorControl(speed, direction) {
-            try {
-                const response = await fetch(`/api/test-motor/${speed}/${direction || 'forward'}`);
-                if (response.ok) {
-                    const result = await response.json();
-                    console.log('🧪 Test motor command sent:', result);
-                    showCommandFeedback(`Test: ${speed}% ${direction || 'forward'}`, 'success');
-                } else {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-            } catch (error) {
-                console.error('❌ Error testing motor:', error);
-                showCommandFeedback(`Test failed: ${error.message}`, 'error');
-            }
-        }
-
         // Initialize everything
         document.addEventListener('DOMContentLoaded', function() {
             initCharts();
@@ -1416,51 +1464,12 @@
             // Update system stats every 30 seconds
             setInterval(fetchSystemStats, 30000);
             
-            console.log('🚀 Enhanced MQTT Motor Dashboard initialized');
+            console.log('🚀 Enhanced MQTT Motor Dashboard with Current Monitoring initialized');
             console.log('🎛️ Advanced motor control interface ready');
             console.log('⚙️ BTS7960 motor driver control active');
             console.log('📊 Real-time motor status monitoring enabled');
+            console.log('⚡ ACS712 current sensor monitoring active');
             console.log('📊 Analytics dashboard available at /analytics');
-            
-            // Add keyboard shortcuts for quick testing (development only)
-            document.addEventListener('keydown', function(event) {
-                if (event.ctrlKey && event.altKey) {
-                    switch(event.key) {
-                        case '1':
-                            event.preventDefault();
-                            testMotorControl(25, 'forward');
-                            break;
-                        case '2':
-                            event.preventDefault();
-                            testMotorControl(50, 'forward');
-                            break;
-                        case '3':
-                            event.preventDefault();
-                            testMotorControl(75, 'forward');
-                            break;
-                        case '4':
-                            event.preventDefault();
-                            testMotorControl(100, 'forward');
-                            break;
-                        case '0':
-                            event.preventDefault();
-                            testMotorControl(0, 'stopped');
-                            break;
-                        case 'r':
-                            event.preventDefault();
-                            testMotorControl(50, 'reverse');
-                            break;
-                    }
-                }
-            });
-            
-            console.log('⌨️ Keyboard shortcuts enabled:');
-            console.log('   Ctrl+Alt+1: 25% forward');
-            console.log('   Ctrl+Alt+2: 50% forward');
-            console.log('   Ctrl+Alt+3: 75% forward');
-            console.log('   Ctrl+Alt+4: 100% forward');
-            console.log('   Ctrl+Alt+R: 50% reverse');
-            console.log('   Ctrl+Alt+0: Stop');
         });
     </script>
 </body>
