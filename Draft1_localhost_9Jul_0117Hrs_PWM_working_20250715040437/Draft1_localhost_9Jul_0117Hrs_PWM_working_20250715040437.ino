@@ -74,7 +74,6 @@ struct SensorReading {
   String timestamp;
   float temperature;
   float humidity;
-  float pressure;
   float vibration;
   float vibration_x;
   float vibration_y;
@@ -99,6 +98,7 @@ void setup() {
   Serial.println("║   ESP32 ENHANCED MQTT MOTOR MONITOR + ACS712  ║");
   Serial.println("║  Student: Gourav Shaw (T0436800)              ║");
   Serial.println("║  Enhanced MQTT + BTS7960 + Current Sensing    ║");
+  Serial.println("║  (Pressure monitoring removed)                ║");
   Serial.println("╚═══════════════════════════════════════════════╝");
   Serial.println("");
   
@@ -142,6 +142,7 @@ void setup() {
   Serial.println("📡 Publishing to: " + String(topic_sensors));
   Serial.println("🎮 Motor control ready via: " + String(topic_control));
   Serial.println("⚡ Current monitoring active on GPIO34");
+  Serial.println("📊 Pressure monitoring disabled");
   Serial.println("");
 }
 
@@ -442,9 +443,17 @@ void handleBasicCommand(String command) {
     
   } else if (command == "SPEED_REDUCE") {
     Serial.println("🐌 Speed reduction command received!");
-    int newSpeed = max(25, currentMotorSpeed - 25);  // Reduce by 25%, minimum 25%
-    startGradualTransition(newSpeed, currentDirection);
+    int newSpeed = max(0, currentMotorSpeed - 25);  // Reduce by 25%, minimum 0%
+    String newDirection = (newSpeed == 0) ? "stopped" : currentDirection;
+    startGradualTransition(newSpeed, newDirection);
     publishMotorFeedback("Speed reduced to " + String(newSpeed) + "%");
+    
+  } else if (command == "SPEED_INCREASE") {
+    Serial.println("🚀 Speed increase command received!");
+    int newSpeed = min(100, currentMotorSpeed + 25);  // Increase by 25%, maximum 100%
+    String newDirection = (currentMotorSpeed == 0 && newSpeed > 0) ? "forward" : currentDirection;
+    startGradualTransition(newSpeed, newDirection);
+    publishMotorFeedback("Speed increased to " + String(newSpeed) + "%");
     
   } else if (command == "NORMAL_OPERATION") {
     Serial.println("✅ Normal operation command received!");
@@ -577,7 +586,7 @@ void checkAutomaticFaultResponse(SensorReading data) {
   bool faultDetected = false;
   String faultReason = "";
   
-  // Current-based control (NEW!)
+  // Current-based control
   if (data.motor_current > 30.0) {
     emergencyStop();
     faultReason = "Critical current: " + String(data.motor_current) + " A";
@@ -614,7 +623,7 @@ void checkAutomaticFaultResponse(SensorReading data) {
     faultDetected = true;
   }
   
-  // Power efficiency check (NEW!)
+  // Power efficiency check
   if (data.motor_power > 0 && currentMotorSpeed > 0) {
     float powerPerSpeed = data.motor_power / currentMotorSpeed;
     if (powerPerSpeed > 5.0 && currentMotorSpeed > 25) {  // High power per speed ratio
@@ -643,10 +652,9 @@ SensorReading readSensorData() {
     data.timestamp = "UP_" + String(millis() / 1000);
   }
   
-  // Read environmental data
+  // Read environmental data (removed pressure)
   data.temperature = bme.readTemperature();
   data.humidity = bme.readHumidity();
-  data.pressure = bme.readPressure() / 100.0F;
   
   // Read vibration data
   Wire.beginTransmission(0x68);
@@ -695,7 +703,7 @@ SensorReading readSensorData() {
   data.motor_direction = currentDirection;
   data.motor_status = motorStatus;
   
-  // Include current sensor data (NEW!)
+  // Include current sensor data
   data.motor_current = currentCurrent;
   data.motor_power = currentCurrent * 12.0;  // P = I × V (assuming 12V)
   data.current_status = currentStatus;
@@ -706,12 +714,11 @@ SensorReading readSensorData() {
 }
 
 void publishSensorData(SensorReading data) {
-  // Create enhanced JSON payload with motor and current data
-  StaticJsonDocument<500> jsonDoc;
+  // Create enhanced JSON payload with motor and current data (removed pressure)
+  StaticJsonDocument<450> jsonDoc;
   jsonDoc["timestamp"] = data.timestamp;
   jsonDoc["temperature"] = round(data.temperature * 10) / 10.0;
   jsonDoc["humidity"] = round(data.humidity * 10) / 10.0;
-  jsonDoc["pressure"] = round(data.pressure * 10) / 10.0;
   jsonDoc["vibration"] = round(data.vibration * 1000) / 1000.0;
   jsonDoc["vibration_x"] = round(data.vibration_x * 100) / 100.0;
   jsonDoc["vibration_y"] = round(data.vibration_y * 100) / 100.0;
@@ -726,7 +733,7 @@ void publishSensorData(SensorReading data) {
   jsonDoc["motor_enabled"] = motorEnabled;
   jsonDoc["is_transitioning"] = isTransitioning;
   
-  // Current sensor data (NEW!)
+  // Current sensor data
   jsonDoc["motor_current"] = round(data.motor_current * 100) / 100.0;
   jsonDoc["motor_power"] = round(data.motor_power * 100) / 100.0;
   jsonDoc["current_status"] = data.current_status;
@@ -803,9 +810,6 @@ void displayLocalData(SensorReading data) {
   Serial.print("💧 Humidity: ");
   Serial.print(data.humidity, 1);
   Serial.println(" %");
-  Serial.print("📊 Pressure: ");
-  Serial.print(data.pressure, 1);
-  Serial.println(" hPa");
   
   // Enhanced motor status display with current data
   Serial.println("┌─── MOTOR STATUS ────────────────────────────┐");
@@ -816,7 +820,7 @@ void displayLocalData(SensorReading data) {
   Serial.print(" | Status: ");
   Serial.println(data.motor_status);
   
-  // Current monitoring display (NEW!)
+  // Current monitoring display
   Serial.println("┌─── CURRENT MONITORING ──────────────────────┐");
   Serial.print("⚡ Current: ");
   Serial.print(data.motor_current, 2);

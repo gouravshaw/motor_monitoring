@@ -64,7 +64,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -88,6 +88,16 @@
             color: #00ff88;
             margin-bottom: 15px;
             text-align: center;
+        }
+
+                #transitionType option {
+            background: #000000 !important;
+            color: #ffffff !important;
+        }
+
+        #transitionType {
+            background: #000000 !important;
+            color: #ffffff !important;
         }
 
         .speed-control {
@@ -229,8 +239,13 @@
             color: white; 
         }
         
-        .btn-normal { 
+        .btn-success { 
             background: linear-gradient(45deg, #4CAF50, #2e7d32);
+            color: white; 
+        }
+
+        .btn-normal { 
+            background: linear-gradient(45deg, #00BCD4, #0097A7);
             color: white; 
         }
 
@@ -366,7 +381,7 @@
             animation: blink 1s infinite;
         }
 
-        /* NEW: Current sensor status styles */
+        /* Current sensor status styles */
         .current-status-idle { background: #607D8B; color: white; }
         .current-status-normal { background: #4CAF50; color: white; }
         .current-status-high { background: #FF9800; color: white; }
@@ -380,8 +395,8 @@
 
         .charts-section {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
             margin-bottom: 30px;
         }
 
@@ -389,23 +404,27 @@
             background: rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(10px);
             border-radius: 15px;
-            padding: 20px;
+            padding: 30px;
             border: 1px solid rgba(255, 255, 255, 0.15);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             position: relative;
+            height: 450px;
+            min-width: 400px;
         }
 
         .chart-title {
-            font-size: 1.4em;
-            margin-bottom: 15px;
+            font-size: 1.2em;
+            margin-bottom: 20px;
             text-align: center;
             color: #00ff88;
+            padding-right: 100px;
+            line-height: 1.3;
         }
 
         .chart-analyze-btn {
             position: absolute;
-            top: 15px;
-            right: 15px;
+            top: 20px;
+            right: 20px;
             padding: 8px 16px;
             background: linear-gradient(45deg, #FF9800, #F57C00);
             color: white;
@@ -416,6 +435,8 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 2px 10px rgba(255, 152, 0, 0.3);
+            white-space: nowrap;
+            z-index: 10;
         }
 
         .chart-analyze-btn:hover {
@@ -553,6 +574,18 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        @media (max-width: 1200px) {
+            .charts-section {
+                grid-template-columns: 1fr 1fr;
+                gap: 25px;
+            }
+            
+            .chart-container {
+                min-width: 350px;
+                height: 400px;
+            }
+        }
+
         @media (max-width: 1024px) {
             .control-section {
                 grid-template-columns: 1fr;
@@ -560,11 +593,22 @@
             
             .charts-section {
                 grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .chart-container {
+                min-width: 300px;
+                height: 350px;
             }
 
             .analytics-btn {
                 position: static;
                 margin-top: 15px;
+            }
+
+            .container {
+                max-width: 100%;
+                padding: 15px;
             }
         }
 
@@ -590,6 +634,26 @@
                 position: static;
                 margin-bottom: 20px;
                 display: inline-block;
+            }
+
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-container {
+                min-width: 280px;
+                height: 320px;
+                padding: 20px;
+            }
+
+            .chart-title {
+                font-size: 1.1em;
+                padding-right: 80px;
+            }
+
+            .chart-analyze-btn {
+                padding: 6px 12px;
+                font-size: 0.7em;
             }
         }
 
@@ -675,6 +739,9 @@
                     <button class="control-button btn-warning" onclick="sendQuickCommand('SPEED_REDUCE')">
                         🐌 Reduce Speed (-25%)
                     </button>
+                    <button class="control-button btn-success" onclick="sendQuickCommand('SPEED_INCREASE')">
+                        🚀 Increase Speed (+25%)
+                    </button>
                     <button class="control-button btn-normal" onclick="sendQuickCommand('NORMAL_OPERATION')">
                         ✅ Resume Normal (100%)
                     </button>
@@ -755,7 +822,7 @@
                 <div class="card-status" id="vibStatus">Loading...</div>
             </div>
 
-            <!-- NEW: Current Status Card -->
+            <!-- Current Status Card -->
             <div class="card" id="currentCard">
                 <div class="card-icon">⚡</div>
                 <div class="card-value" id="currentValue">--</div>
@@ -769,31 +836,28 @@
                 <div class="card-label">Humidity (%)</div>
                 <div class="card-status" id="humStatus">Environmental</div>
             </div>
-
-            <div class="card" id="pressCard">
-                <div class="card-icon">📊</div>
-                <div class="card-value" id="pressValue">--</div>
-                <div class="card-label">Pressure (hPa)</div>
-                <div class="card-status" id="pressStatus">Atmospheric</div>
-            </div>
         </div>
 
         <!-- Charts -->
         <div class="charts-section">
             <div class="chart-container">
                 <button class="chart-analyze-btn" onclick="window.open('/analytics', '_blank')">📊 Analyze</button>
-                <div class="chart-title">Temperature & Motor Speed Trend</div>
-                <canvas id="tempChart" width="400" height="200"></canvas>
+                <div class="chart-title">Temperature & Motor Speed</div>
+                <canvas id="tempChart" width="400" height="300"></canvas>
             </div>
 
             <div class="chart-container">
                 <button class="chart-analyze-btn" onclick="window.open('/analytics', '_blank')">📊 Analyze</button>
                 <div class="chart-title">Motor Current Pattern</div>
-                <canvas id="currentChart" width="400" height="200"></canvas>
+                <canvas id="currentChart" width="400" height="300"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <button class="chart-analyze-btn" onclick="window.open('/analytics', '_blank')">📊 Analyze</button>
+                <div class="chart-title">Vibration Monitoring</div>
+                <canvas id="vibrationChart" width="400" height="300"></canvas>
             </div>
         </div>
-
-        
 
         <!-- Data Table -->
         <div class="data-table">
@@ -825,7 +889,7 @@
 
     <script>
         // Global variables
-        let tempChart, currentChart;
+        let tempChart, currentChart, vibrationChart;
         let tempData = [];
         let vibData = [];
         let motorSpeedData = [];
@@ -920,12 +984,24 @@
                     // Update UI based on command
                     if (command === 'EMERGENCY_STOP') {
                         setDirection('stopped');
-                        document.getElementById('speedSlider').value = 0;
-                        updateSpeedDisplay();
+                        updateSliderAndDisplay(0);
+                    } else if (command === 'SPEED_REDUCE') {
+                        const currentSpeed = parseInt(document.getElementById('speedSlider').value);
+                        const newSpeed = Math.max(0, currentSpeed - 25);
+                        updateSliderAndDisplay(newSpeed);
+                        if (newSpeed === 0) {
+                            setDirection('stopped');
+                        }
+                    } else if (command === 'SPEED_INCREASE') {
+                        const currentSpeed = parseInt(document.getElementById('speedSlider').value);
+                        const newSpeed = Math.min(100, currentSpeed + 25);
+                        updateSliderAndDisplay(newSpeed);
+                        if (currentSpeed === 0 && newSpeed > 0) {
+                            setDirection('forward');
+                        }
                     } else if (command === 'NORMAL_OPERATION') {
                         setDirection('forward');
-                        document.getElementById('speedSlider').value = 100;
-                        updateSpeedDisplay();
+                        updateSliderAndDisplay(100);
                     }
                 } else {
                     throw new Error(`HTTP ${response.status}`);
@@ -934,6 +1010,12 @@
                 console.error('❌ Error sending quick command:', error);
                 showCommandFeedback(`Failed to send command: ${error.message}`, 'error');
             }
+        }
+
+        // New function to update both slider and display
+        function updateSliderAndDisplay(speed) {
+            document.getElementById('speedSlider').value = speed;
+            updateSpeedDisplay();
         }
 
         function showCommandFeedback(message, type) {
@@ -984,6 +1066,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     interaction: {
                         mode: 'index',
                         intersect: false,
@@ -1034,7 +1117,7 @@
                 }
             });
 
-            // NEW: Current Chart
+            // Current Chart
             const currentCtx = document.getElementById('currentChart').getContext('2d');
             currentChart = new Chart(currentCtx, {
                 type: 'line',
@@ -1054,6 +1137,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: { 
                             labels: { color: '#ffffff' }
@@ -1067,6 +1151,56 @@
                             title: {
                                 display: true,
                                 text: 'Current (A)',
+                                color: '#ffffff'
+                            }
+                        },
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                color: '#ffffff'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Vibration Chart
+            const vibCtx = document.getElementById('vibrationChart').getContext('2d');
+            vibrationChart = new Chart(vibCtx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [{
+                        label: 'Vibration (m/s²)',
+                        data: vibData,
+                        borderColor: '#9c27b0',
+                        backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#9c27b0',
+                        pointBorderColor: '#ffffff',
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            labels: { color: '#ffffff' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff' },
+                            title: {
+                                display: true,
+                                text: 'Vibration (m/s²)',
                                 color: '#ffffff'
                             }
                         },
@@ -1126,7 +1260,6 @@
             document.getElementById('tempValue').textContent = '--';
             document.getElementById('vibValue').textContent = '--';
             document.getElementById('humValue').textContent = '--';
-            document.getElementById('pressValue').textContent = '--';
             document.getElementById('currentValue').textContent = '--';
             
             // Motor status
@@ -1139,7 +1272,6 @@
             updateStatus('tempStatus', 'SYSTEM OFFLINE');
             updateStatus('vibStatus', 'SYSTEM OFFLINE');
             updateStatus('humStatus', 'SYSTEM OFFLINE');
-            updateStatus('pressStatus', 'SYSTEM OFFLINE');
             updateCurrentStatus('currentStatus', 'OFFLINE');
             
             // Load recent readings from database when offline
@@ -1152,9 +1284,8 @@
             document.getElementById('tempValue').textContent = data.temperature?.toFixed(1) || '--';
             document.getElementById('vibValue').textContent = data.vibration?.toFixed(3) || '--';
             document.getElementById('humValue').textContent = data.humidity?.toFixed(1) || '--';
-            document.getElementById('pressValue').textContent = data.pressure?.toFixed(1) || '--';
 
-            // NEW: Update current monitoring display
+            // Update current monitoring display
             document.getElementById('currentValue').textContent = data.motor_current?.toFixed(2) || '--';
 
             // Update motor status
@@ -1164,12 +1295,27 @@
             document.getElementById('motorEnabled').textContent = data.motor_enabled ? 'YES' : 'NO';
             document.getElementById('isTransitioning').textContent = data.is_transitioning ? 'YES' : 'NO';
 
+            // Update slider to reflect actual motor speed
+            if (data.motor_speed !== undefined && data.motor_speed !== null) {
+                updateSliderAndDisplay(data.motor_speed);
+                
+                // Update direction based on motor data
+                if (data.motor_direction) {
+                    if (data.motor_direction === 'stopped' || data.motor_speed === 0) {
+                        setDirection('stopped');
+                    } else if (data.motor_direction === 'forward') {
+                        setDirection('forward');
+                    } else if (data.motor_direction === 'reverse') {
+                        setDirection('reverse');
+                    }
+                }
+            }
+
             // Update status indicators
             if (isStale) {
                 updateStatus('tempStatus', 'SYSTEM OFFLINE');
                 updateStatus('vibStatus', 'SYSTEM OFFLINE');
                 updateStatus('humStatus', 'SYSTEM OFFLINE');
-                updateStatus('pressStatus', 'SYSTEM OFFLINE');
                 updateCurrentStatus('currentStatus', 'OFFLINE');
                 
                 // Add stale indicator to all cards
@@ -1177,12 +1323,10 @@
                 document.getElementById('vibCard').classList.add('stale-indicator');
                 document.getElementById('currentCard').classList.add('stale-indicator');
                 document.getElementById('humCard').classList.add('stale-indicator');
-                document.getElementById('pressCard').classList.add('stale-indicator');
             } else {
                 updateStatus('tempStatus', data.temp_status);
                 updateStatus('vibStatus', data.vib_status);
                 updateStatus('humStatus', 'Environmental');
-                updateStatus('pressStatus', 'Atmospheric');
                 updateCurrentStatus('currentStatus', data.current_status);
                 
                 // Remove stale indicator from all cards
@@ -1190,7 +1334,6 @@
                 document.getElementById('vibCard').classList.remove('stale-indicator');
                 document.getElementById('currentCard').classList.remove('stale-indicator');
                 document.getElementById('humCard').classList.remove('stale-indicator');
-                document.getElementById('pressCard').classList.remove('stale-indicator');
             }
 
             // Only update charts with fresh data
@@ -1214,6 +1357,7 @@
 
                 tempChart.update();
                 currentChart.update();
+                vibrationChart.update();
             }
 
             // Update last update time
@@ -1231,7 +1375,7 @@
             }
         }
 
-        // NEW: Update current status function
+        // Update current status function
         function updateCurrentStatus(elementId, status) {
             const element = document.getElementById(elementId);
             element.textContent = status || 'Unknown';
@@ -1378,9 +1522,6 @@
                     element.classList.add('status-stale');
                     break;
                 case 'environmental':
-                    element.classList.add('status-normal');
-                    break;
-                case 'atmospheric':
                     element.classList.add('status-normal');
                     break;
                 default:

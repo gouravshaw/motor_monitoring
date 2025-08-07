@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Motor Analytics Dashboard - Professional Data Analysis with Current Monitoring</title>
+    <title>Enhanced MQTT Motor Control Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
@@ -111,6 +111,16 @@
             background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
             font-size: 14px;
+        }
+
+        .control-group select {
+            background: #000000;
+            color: #ffffff;
+        }
+
+        .control-group select option {
+            background: #000000;
+            color: #ffffff;
         }
 
         .control-group input:focus,
@@ -580,7 +590,7 @@
                 <div class="stat-value" id="avgMotorSpeed">--%</div>
                 <div class="stat-label">Avg Motor Speed</div>
             </div>
-            <!-- NEW: Current monitoring statistics -->
+            <!-- Current monitoring statistics -->
             <div class="stat-card">
                 <div class="stat-value" id="avgMotorCurrent">-- A</div>
                 <div class="stat-label">Avg Motor Current</div>
@@ -651,7 +661,6 @@
                             <th>Timestamp</th>
                             <th>Temperature (°C)</th>
                             <th>Humidity (%)</th>
-                            <th>Pressure (hPa)</th>
                             <th>Vibration (m/s²)</th>
                             <th>Motor Speed (%)</th>
                             <th>Current (A)</th>
@@ -661,7 +670,7 @@
                     </thead>
                     <tbody id="dataTableBody">
                         <tr>
-                            <td colspan="9" class="loading">Loading analytics data...</td>
+                            <td colspan="8" class="loading">Loading analytics data...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -775,7 +784,7 @@
                 document.getElementById('avgVibration').textContent = (stats.avgVibration || 0).toFixed(3);
                 document.getElementById('avgMotorSpeed').textContent = `${Math.round(stats.avgMotorSpeed || 0)}%`;
                 
-                // NEW: Current monitoring statistics
+                // Current monitoring statistics
                 document.getElementById('avgMotorCurrent').textContent = `${(stats.avgMotorCurrent || 0).toFixed(2)} A`;
                 document.getElementById('avgMotorPower').textContent = `${(stats.avgMotorPower || 0).toFixed(1)} W`;
                 document.getElementById('maxMotorCurrent').textContent = `${(stats.maxMotorCurrent || 0).toFixed(2)} A`;
@@ -788,6 +797,17 @@
                 
             } catch (error) {
                 console.error('❌ Error loading statistics:', error);
+                // Set default values on error
+                document.getElementById('totalReadings').textContent = '0';
+                document.getElementById('avgTemperature').textContent = '0.0°C';
+                document.getElementById('avgVibration').textContent = '0.000';
+                document.getElementById('avgMotorSpeed').textContent = '0%';
+                document.getElementById('avgMotorCurrent').textContent = '0.00 A';
+                document.getElementById('avgMotorPower').textContent = '0.0 W';
+                document.getElementById('maxMotorCurrent').textContent = '0.00 A';
+                document.getElementById('totalEnergyConsumed').textContent = '0.000 Ah';
+                document.getElementById('faultRate').textContent = '0.0%';
+                document.getElementById('currentFaultRate').textContent = '0.0%';
                 throw error;
             }
         }
@@ -803,9 +823,9 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
                 const result = await response.json();
-                currentData = result.data;
+                currentData = result.data || [];
                 
-                // Create enhanced charts
+                // Create enhanced charts even with empty data
                 createTempCurrentChart(currentData);
                 createPowerChart(currentData);
                 createVibCurrentChart(currentData);
@@ -815,6 +835,12 @@
                 
             } catch (error) {
                 console.error('❌ Error loading charts data:', error);
+                // Create charts with empty data
+                currentData = [];
+                createTempCurrentChart([]);
+                createPowerChart([]);
+                createVibCurrentChart([]);
+                createEfficiencyChart([]);
                 throw error;
             }
         }
@@ -1035,15 +1061,15 @@
                 
                 const result = await response.json();
                 
-                displayEnhancedDataTable(result.data, result.pagination);
-                updatePagination(result.pagination);
+                displayEnhancedDataTable(result.data || [], result.pagination || {});
+                updatePagination(result.pagination || {});
                 
                 console.log('📊 Enhanced data table loaded:', result);
                 
             } catch (error) {
                 console.error('❌ Error loading data table:', error);
                 document.getElementById('dataTableBody').innerHTML = 
-                    '<tr><td colspan="9" class="error">Error loading table data</td></tr>';
+                    '<tr><td colspan="8" class="error">Error loading table data</td></tr>';
             }
         }
 
@@ -1055,11 +1081,10 @@
                 return;
             }
 
-            const sensors = ['temperature', 'humidity', 'pressure', 'vibration', 'motor_speed', 'motor_current', 'motor_power'];
+            const sensors = ['temperature', 'humidity', 'vibration', 'motor_speed', 'motor_current', 'motor_power'];
             const sensorLabels = {
                 temperature: 'Temperature',
                 humidity: 'Humidity',
-                pressure: 'Pressure',
                 vibration: 'Vibration',
                 motor_speed: 'Motor Speed',
                 motor_current: 'Motor Current',
@@ -1105,7 +1130,7 @@
             const tableBody = document.getElementById('dataTableBody');
             
             if (!data || data.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No data available</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No data available for the selected time range</td></tr>';
                 return;
             }
 
@@ -1119,7 +1144,6 @@
                         <td>${timestamp}</td>
                         <td>${(row.temperature || row.avg_temperature || 0).toFixed(1)}</td>
                         <td>${(row.humidity || row.avg_humidity || 0).toFixed(1)}</td>
-                        <td>${(row.pressure || row.avg_pressure || 0).toFixed(1)}</td>
                         <td>${(row.vibration || row.avg_vibration || 0).toFixed(3)}</td>
                         <td>${Math.round(row.motor_speed || row.avg_motor_speed || 0)}</td>
                         <td>${(row.motor_current || row.avg_motor_current || 0).toFixed(2)}</td>
@@ -1133,14 +1157,14 @@
 
             // Update pagination info
             document.getElementById('paginationInfo').textContent = 
-                `Page ${pagination.page} of ${pagination.pages} (${pagination.total} total records)`;
+                `Page ${pagination.page || 1} of ${pagination.pages || 1} (${pagination.total || 0} total records)`;
         }
 
         // Update pagination controls
         function updatePagination(pagination) {
             const paginationDiv = document.getElementById('pagination');
-            currentPage = pagination.page;
-            totalPages = pagination.pages;
+            currentPage = pagination.page || 1;
+            totalPages = pagination.pages || 1;
 
             let html = '';
 

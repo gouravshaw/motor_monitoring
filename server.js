@@ -18,12 +18,11 @@ mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Enhanced Schema with current sensor data
+// Enhanced Schema with current sensor data (removed pressure)
 const SensorSchema = new mongoose.Schema({
   timestamp: String,
   temperature: Number,
   humidity: Number,
-  pressure: Number,
   vibration: Number,
   vibration_x: Number,
   vibration_y: Number,
@@ -36,7 +35,7 @@ const SensorSchema = new mongoose.Schema({
   motor_enabled: { type: Boolean, default: true },
   is_transitioning: { type: Boolean, default: false },
   
-  // NEW: Current sensor fields
+  // Current sensor fields
   motor_current: { type: Number, default: 0 },
   motor_power: { type: Number, default: 0 },
   current_status: { type: String, default: 'IDLE' },
@@ -125,7 +124,6 @@ client.on('message', async (topic, message) => {
           timestamp: data.timestamp,
           temperature: data.temperature,
           humidity: data.humidity,
-          pressure: data.pressure,
           vibration: data.vibration,
           vibration_x: data.vibration_x,
           vibration_y: data.vibration_y,
@@ -138,7 +136,7 @@ client.on('message', async (topic, message) => {
           motor_enabled: data.motor_enabled,
           is_transitioning: data.is_transitioning,
           
-          // NEW: Current sensor data
+          // Current sensor data
           motor_current: data.motor_current || 0,
           motor_power: data.motor_power || 0,
           current_status: data.current_status || 'IDLE',
@@ -481,7 +479,7 @@ app.get('/api/motor/diagnostics', async (req, res) => {
       averageSpeed: motorData.length > 0 ? 
         motorData.reduce((sum, d) => sum + (d.motor_speed || 0), 0) / motorData.length : 0,
       
-      // NEW: Current-based diagnostics
+      // Current-based diagnostics
       averageCurrent: motorData.length > 0 ?
         motorData.reduce((sum, d) => sum + (d.motor_current || 0), 0) / motorData.length : 0,
       peakCurrent: Math.max(...motorData.map(d => d.motor_current || 0)),
@@ -495,7 +493,7 @@ app.get('/api/motor/diagnostics', async (req, res) => {
       emergencyStops: 0,
       transitions: motorData.filter(d => d.is_transitioning).length,
       
-      // NEW: Current anomalies
+      // Current anomalies
       currentSpikes: motorData.filter(d => (d.motor_current || 0) > 25).length,
       overloadEvents: motorData.filter(d => d.current_status === 'OVERLOAD').length,
       faultEvents: motorData.filter(d => d.current_status === 'FAULT').length,
@@ -545,7 +543,7 @@ app.get('/api/motor/diagnostics', async (req, res) => {
   }
 });
 
-// ===== ANALYTICS API ENDPOINTS =====
+// ===== ENHANCED ANALYTICS API ENDPOINTS =====
 
 // Analytics data endpoint with filtering and aggregation
 app.get('/api/analytics/data', async (req, res) => {
@@ -607,7 +605,6 @@ app.get('/api/analytics/data', async (req, res) => {
             count: { $sum: 1 },
             avg_temperature: { $avg: '$temperature' },
             avg_humidity: { $avg: '$humidity' },
-            avg_pressure: { $avg: '$pressure' },
             avg_vibration: { $avg: '$vibration' },
             avg_motor_speed: { $avg: '$motor_speed' },
             avg_motor_current: { $avg: '$motor_current' },
@@ -667,6 +664,8 @@ app.get('/api/analytics/stats', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
+    console.log('📊 Analytics stats request:', { startDate, endDate });
+
     // Build date filter
     const dateFilter = {};
     if (startDate) dateFilter.$gte = new Date(startDate);
@@ -676,6 +675,8 @@ app.get('/api/analytics/stats', async (req, res) => {
     if (Object.keys(dateFilter).length > 0) {
       matchQuery.created_at = dateFilter;
     }
+
+    console.log('📊 Match query:', matchQuery);
 
     const stats = await SensorReading.aggregate([
       { $match: matchQuery },
@@ -687,12 +688,11 @@ app.get('/api/analytics/stats', async (req, res) => {
           minTemperature: { $min: '$temperature' },
           maxTemperature: { $max: '$temperature' },
           avgHumidity: { $avg: '$humidity' },
-          avgPressure: { $avg: '$pressure' },
           avgVibration: { $avg: '$vibration' },
           maxVibration: { $max: '$vibration' },
           avgMotorSpeed: { $avg: '$motor_speed' },
           
-          // NEW: Current sensor statistics
+          // Current sensor statistics
           avgMotorCurrent: { $avg: '$motor_current' },
           maxMotorCurrent: { $max: '$motor_current' },
           avgMotorPower: { $avg: '$motor_power' },
@@ -706,7 +706,7 @@ app.get('/api/analytics/stats', async (req, res) => {
             $sum: { $cond: [{ $eq: ['$vib_status', 'HIGH'] }, 1, 0] }
           },
           
-          // NEW: Current-based fault detection
+          // Current-based fault detection
           currentOverloads: {
             $sum: { $cond: [{ $eq: ['$current_status', 'OVERLOAD'] }, 1, 0] }
           },
@@ -723,7 +723,6 @@ app.get('/api/analytics/stats', async (req, res) => {
       minTemperature: 0,
       maxTemperature: 0,
       avgHumidity: 0,
-      avgPressure: 0,
       avgVibration: 0,
       maxVibration: 0,
       avgMotorSpeed: 0,
@@ -754,7 +753,7 @@ app.get('/api/analytics/stats', async (req, res) => {
       result.specificPowerConsumption = result.avgMotorPower / result.avgMotorSpeed; // W per %speed
     }
 
-    console.log('📊 Enhanced analytics statistics calculated with current data');
+    console.log('📊 Enhanced analytics statistics calculated:', result);
     res.json(result);
 
   } catch (error) {
@@ -771,6 +770,8 @@ app.get('/api/analytics/correlations', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
+    console.log('📊 Analytics correlations request:', { startDate, endDate });
+
     // Build date filter
     const dateFilter = {};
     if (startDate) dateFilter.$gte = new Date(startDate);
@@ -783,8 +784,10 @@ app.get('/api/analytics/correlations', async (req, res) => {
 
     const data = await SensorReading
       .find(matchQuery)
-      .select('temperature humidity pressure vibration motor_speed motor_current motor_power')
+      .select('temperature humidity vibration motor_speed motor_current motor_power')
       .lean();
+
+    console.log(`📊 Retrieved ${data.length} records for correlation analysis`);
 
     if (data.length === 0) {
       return res.json({ correlations: {}, message: 'No data available for correlation analysis' });
@@ -793,7 +796,7 @@ app.get('/api/analytics/correlations', async (req, res) => {
     // Calculate correlations with enhanced dataset
     const correlations = calculateEnhancedCorrelations(data);
 
-    console.log('📊 Enhanced correlation matrix calculated with current data');
+    console.log('📊 Enhanced correlation matrix calculated');
     res.json({ correlations, sampleSize: data.length });
 
   } catch (error) {
@@ -810,22 +813,23 @@ app.get('/api/analytics/export', async (req, res) => {
   try {
     const { startDate, endDate, format = 'csv' } = req.query;
 
-    // Get data using the same logic as the data endpoint
-    const dataResponse = await new Promise((resolve, reject) => {
-      // Simulate the /api/analytics/data call
-      const mockReq = {
-        query: { startDate, endDate, aggregation: 'raw', export: 'true' }
-      };
-      const mockRes = {
-        json: (data) => resolve(data),
-        status: () => ({ json: (error) => reject(error) })
-      };
-      
-      // We'll call our own endpoint logic here
-      app._router.handle(mockReq, mockRes);
-    });
+    console.log('📊 Export request:', { startDate, endDate, format });
 
-    const data = dataResponse.data;
+    // Build date filter
+    const dateFilter = {};
+    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (endDate) dateFilter.$lte = new Date(endDate);
+
+    let query = {};
+    if (Object.keys(dateFilter).length > 0) {
+      query.created_at = dateFilter;
+    }
+
+    // Get data for export
+    const data = await SensorReading
+      .find(query)
+      .sort({ created_at: -1 })
+      .lean();
 
     if (format === 'csv') {
       // Convert to CSV
@@ -840,7 +844,7 @@ app.get('/api/analytics/export', async (req, res) => {
       res.json(data);
     }
 
-    console.log(`📊 Data exported in ${format} format`);
+    console.log(`📊 Data exported in ${format} format: ${data.length} records`);
 
   } catch (error) {
     console.error('❌ Error exporting data:', error);
@@ -877,16 +881,16 @@ function getGroupByExpression(aggregation) {
 
 // Enhanced correlation calculation function
 function calculateEnhancedCorrelations(data) {
-  const fields = ['temperature', 'humidity', 'pressure', 'vibration', 'motor_speed', 'motor_current', 'motor_power'];
+  const fields = ['temperature', 'humidity', 'vibration', 'motor_speed', 'motor_current', 'motor_power'];
   const correlations = {};
 
   fields.forEach(field1 => {
     correlations[field1] = {};
     fields.forEach(field2 => {
-      correlations[field1][field2] = calculatePearsonCorrelation(
-        data.map(d => d[field1]).filter(v => v != null),
-        data.map(d => d[field2]).filter(v => v != null)
-      );
+      const values1 = data.map(d => d[field1]).filter(v => v != null && !isNaN(v));
+      const values2 = data.map(d => d[field2]).filter(v => v != null && !isNaN(v));
+      
+      correlations[field1][field2] = calculatePearsonCorrelation(values1, values2);
     });
   });
 
@@ -912,7 +916,11 @@ function calculatePearsonCorrelation(x, y) {
 function convertToCSV(data) {
   if (!data || data.length === 0) return '';
 
-  const headers = Object.keys(data[0]);
+  // Define headers without pressure
+  const headers = ['created_at', 'timestamp', 'temperature', 'humidity', 'vibration', 'vibration_x', 'vibration_y', 'vibration_z', 
+                   'temp_status', 'vib_status', 'motor_speed', 'motor_direction', 'motor_status', 'motor_enabled', 'is_transitioning',
+                   'motor_current', 'motor_power', 'current_status', 'max_current', 'total_energy', 'device_id'];
+  
   const csvContent = [
     headers.join(','),
     ...data.map(row => 
@@ -962,5 +970,6 @@ app.listen(PORT, () => {
   console.log('║  • Data export (CSV/JSON)                     ║');
   console.log('║  • Motor command logging                      ║');
   console.log('║  • Enhanced MQTT communication               ║');
+  console.log('║  • Removed pressure monitoring               ║');
   console.log('╚════════════════════════════════════════════════╝');
 });
