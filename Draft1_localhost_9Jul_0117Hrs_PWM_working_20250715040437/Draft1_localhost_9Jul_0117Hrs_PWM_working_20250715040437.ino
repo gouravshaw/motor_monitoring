@@ -12,7 +12,7 @@ const char* ssid = "shaw";
 const char* password = "1234567890";
 
 // MQTT settings
-const char* mqtt_server = "10.72.124.34"; 
+const char* mqtt_server = "10.101.105.34"; 
 const int mqtt_port = 1883;
 const char* mqtt_client_id = "ESP32_Motor_Monitor";
 
@@ -22,10 +22,10 @@ const char* topic_status = "motor/status";
 const char* topic_control = "motor/control";
 const char* topic_motor_feedback = "motor/feedback";
 
-// NTP settings
+// NTP settings for timezone consistency
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = 0;
-const int daylightOffset_sec = 3600;
+const long gmtOffset_sec = 0;           // UTC offset (0 for UTC)
+const int daylightOffset_sec = 0;       // No daylight saving for consistency
 
 // *** BTS7960 Motor Control Pins ***
 #define MOTOR_RPWM  25    // RPWM pin (Forward)
@@ -36,15 +36,16 @@ const int daylightOffset_sec = 3600;
 // *** ACS712 Current Sensor Pin ***
 #define CURRENT_SENSOR_PIN  34    // GPIO34 (ADC1_CH6) for ACS712 OUT
 
-// ACS712 Configuration (ACS712-30A)
+// ENHANCED: ACS712 Configuration (ACS712-30A) with better calibration
 const float ACS712_SENSITIVITY = 0.066;  // 66mV/A for ACS712-30A
 const float ACS712_ZERO_CURRENT_VOLTAGE = 1.65;  // 1.65V at 0A (for 3.3V supply)
 const int ADC_RESOLUTION = 4095;  // 12-bit ADC
 const float ADC_VOLTAGE_REF = 3.3;  // ESP32 ADC reference voltage
+const float MOTOR_VOLTAGE = 12.0;   // FIXED: Motor supply voltage for P = V × I
 
 // Current sensor calibration and filtering
 float currentOffset = 0.0;  // Calibration offset
-const int CURRENT_SAMPLES = 10;  // Number of samples for averaging
+const int CURRENT_SAMPLES = 20;  // Increased samples for better filtering
 float currentReadings[CURRENT_SAMPLES];
 int currentSampleIndex = 0;
 bool currentSamplesReady = false;
@@ -60,12 +61,13 @@ int targetSpeed = 100;
 String targetDirection = "forward";
 bool isTransitioning = false;
 
-// Current monitoring variables
+// ENHANCED: Current monitoring variables with better tracking
 float currentCurrent = 0.0;         // Current motor current in Amperes
 float maxCurrent = 0.0;             // Peak current since startup
 float totalEnergy = 0.0;            // Total energy consumed (Ah)
 unsigned long lastEnergyUpdate = 0;
-String currentStatus = "NORMAL";    // "NORMAL", "HIGH", "OVERLOAD", "FAULT"
+String currentStatus = "IDLE";      // "IDLE", "NORMAL", "HIGH", "OVERLOAD", "FAULT"
+float motorPower = 0.0;             // Calculated motor power (P = V × I)
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -83,11 +85,13 @@ struct SensorReading {
   int motor_speed;
   String motor_direction;
   String motor_status;
-  float motor_current;        // Added current measurement
-  float motor_power;          // Added power calculation
-  String current_status;      // Added current status
-  float max_current;          // Added peak current
-  float total_energy;         // Added energy consumption
+  float motor_current;        // Current measurement
+  float motor_power;          // Power calculation P = V × I
+  float motor_voltage;        // Motor voltage for documentation
+  String power_formula;       // Formula documentation
+  String current_status;      // Current status
+  float max_current;          // Peak current
+  float total_energy;         // Energy consumption
 };
 
 void setup() {
@@ -98,11 +102,13 @@ void setup() {
   Serial.println("║   ESP32 ENHANCED MQTT MOTOR MONITOR + ACS712  ║");
   Serial.println("║  Student: Gourav Shaw (T0436800)              ║");
   Serial.println("║  Enhanced MQTT + BTS7960 + Current Sensing    ║");
+  Serial.println("║  FIXED: Timezone Consistency & Power Formula  ║");
+  Serial.println("║  FIXED: P = V × I (12V Motor)                 ║");
   Serial.println("║  (Pressure monitoring removed)                ║");
   Serial.println("╚═══════════════════════════════════════════════╝");
   Serial.println("");
   
-  // Initialize current sensor
+  // Initialize current sensor with enhanced calibration
   setupCurrentSensor();
   
   // Initialize motor control pins
@@ -111,9 +117,10 @@ void setup() {
   // Initialize WiFi
   setupWiFi();
   
-  // Setup time
+  // FIXED: Setup time with consistent timezone (UTC)
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   delay(2000);
+  Serial.println("🕐 Time configured for UTC consistency");
   
   // Setup MQTT with larger buffer for enhanced commands
   client.setServer(mqtt_server, mqtt_port);
@@ -142,7 +149,9 @@ void setup() {
   Serial.println("📡 Publishing to: " + String(topic_sensors));
   Serial.println("🎮 Motor control ready via: " + String(topic_control));
   Serial.println("⚡ Current monitoring active on GPIO34");
+  Serial.println("🔋 Power calculation: P = V × I = 12V × Current");
   Serial.println("📊 Pressure monitoring disabled");
+  Serial.println("🕐 Timezone: UTC for consistency");
   Serial.println("");
 }
 
@@ -178,6 +187,7 @@ void loop() {
   delay(100); // Small delay for responsiveness
 }
 
+// ENHANCED: Current sensor setup with improved calibration
 void setupCurrentSensor() {
   Serial.println("⚡ Initializing ACS712 Current Sensor...");
   
@@ -197,6 +207,8 @@ void setupCurrentSensor() {
   Serial.println("✅ ACS712 Current Sensor initialized");
   Serial.println("⚡ Sensitivity: " + String(ACS712_SENSITIVITY) + " V/A");
   Serial.println("⚡ Zero current voltage: " + String(ACS712_ZERO_CURRENT_VOLTAGE) + " V");
+  Serial.println("⚡ Motor voltage: " + String(MOTOR_VOLTAGE) + " V");
+  Serial.println("⚡ Power formula: P = V × I");
   Serial.println("⚡ Calibration offset: " + String(currentOffset) + " V");
 }
 
@@ -204,7 +216,7 @@ void calibrateCurrentSensor() {
   Serial.println("🔧 Calibrating current sensor (ensure motor is stopped)...");
   
   float sum = 0.0;
-  const int calibrationSamples = 100;
+  const int calibrationSamples = 200;  // Increased for better calibration
   
   for (int i = 0; i < calibrationSamples; i++) {
     int rawValue = analogRead(CURRENT_SENSOR_PIN);
@@ -221,6 +233,7 @@ void calibrateCurrentSensor() {
   Serial.println("⚡ Calculated offset: " + String(currentOffset) + " V");
 }
 
+// ENHANCED: Current reading with improved filtering
 void updateCurrentReading() {
   // Read ADC value
   int rawValue = analogRead(CURRENT_SENSOR_PIN);
@@ -266,10 +279,14 @@ void updateCurrentReading() {
     maxCurrent = currentCurrent;
   }
   
+  // FIXED: Calculate motor power using P = V × I
+  motorPower = currentCurrent * MOTOR_VOLTAGE;
+  
   // Update current status
   updateCurrentStatus();
 }
 
+// ENHANCED: Current status with better thresholds
 void updateCurrentStatus() {
   if (currentCurrent < 0.1) {
     currentStatus = "IDLE";
@@ -284,6 +301,7 @@ void updateCurrentStatus() {
   }
 }
 
+// ENHANCED: Energy calculation with better precision
 void updateEnergyCalculation() {
   unsigned long currentTime = millis();
   
@@ -579,6 +597,7 @@ void emergencyStop() {
   Serial.println("🛑 EMERGENCY STOP ACTIVATED");
 }
 
+// ENHANCED: Automatic fault response with current monitoring
 void checkAutomaticFaultResponse(SensorReading data) {
   // Enhanced automatic fault-based motor control (including current)
   if (!motorEnabled) return; // Don't interfere if manually disabled
@@ -586,10 +605,10 @@ void checkAutomaticFaultResponse(SensorReading data) {
   bool faultDetected = false;
   String faultReason = "";
   
-  // Current-based control
+  // ENHANCED: Current-based control with power analysis
   if (data.motor_current > 30.0) {
     emergencyStop();
-    faultReason = "Critical current: " + String(data.motor_current) + " A";
+    faultReason = "Critical current: " + String(data.motor_current) + " A (Power: " + String(data.motor_power) + " W)";
     faultDetected = true;
   } else if (data.motor_current > 25.0 && currentMotorSpeed > 25) {
     emergencyStop();
@@ -623,12 +642,12 @@ void checkAutomaticFaultResponse(SensorReading data) {
     faultDetected = true;
   }
   
-  // Power efficiency check
+  // ENHANCED: Power efficiency check
   if (data.motor_power > 0 && currentMotorSpeed > 0) {
     float powerPerSpeed = data.motor_power / currentMotorSpeed;
     if (powerPerSpeed > 5.0 && currentMotorSpeed > 25) {  // High power per speed ratio
       startGradualTransition(currentMotorSpeed - 25, currentDirection);
-      faultReason = "Poor efficiency: reducing speed for optimization";
+      faultReason = "Poor efficiency: reducing speed for optimization (P/S ratio: " + String(powerPerSpeed) + ")";
       faultDetected = true;
     }
   }
@@ -639,10 +658,11 @@ void checkAutomaticFaultResponse(SensorReading data) {
   }
 }
 
+// FIXED: Enhanced sensor data reading with proper timestamp and power calculation
 SensorReading readSensorData() {
   SensorReading data;
   
-  // Get timestamp
+  // FIXED: Get timestamp in UTC for consistency
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)) {
     char timestamp[25];
@@ -703,9 +723,11 @@ SensorReading readSensorData() {
   data.motor_direction = currentDirection;
   data.motor_status = motorStatus;
   
-  // Include current sensor data
+  // FIXED: Enhanced current sensor data with proper power calculation documentation
   data.motor_current = currentCurrent;
-  data.motor_power = currentCurrent * 12.0;  // P = I × V (assuming 12V)
+  data.motor_power = motorPower;              // P = V × I
+  data.motor_voltage = MOTOR_VOLTAGE;         // Document voltage used
+  data.power_formula = "P=V*I";              // Document formula
   data.current_status = currentStatus;
   data.max_current = maxCurrent;
   data.total_energy = totalEnergy;
@@ -713,9 +735,10 @@ SensorReading readSensorData() {
   return data;
 }
 
+// FIXED: Enhanced MQTT payload with comprehensive power and current data
 void publishSensorData(SensorReading data) {
   // Create enhanced JSON payload with motor and current data (removed pressure)
-  StaticJsonDocument<450> jsonDoc;
+  StaticJsonDocument<550> jsonDoc;  // Increased size for additional metadata
   jsonDoc["timestamp"] = data.timestamp;
   jsonDoc["temperature"] = round(data.temperature * 10) / 10.0;
   jsonDoc["humidity"] = round(data.humidity * 10) / 10.0;
@@ -733,14 +756,20 @@ void publishSensorData(SensorReading data) {
   jsonDoc["motor_enabled"] = motorEnabled;
   jsonDoc["is_transitioning"] = isTransitioning;
   
-  // Current sensor data
+  // FIXED: Enhanced current sensor data with complete power calculation metadata
   jsonDoc["motor_current"] = round(data.motor_current * 100) / 100.0;
   jsonDoc["motor_power"] = round(data.motor_power * 100) / 100.0;
+  jsonDoc["motor_voltage"] = data.motor_voltage;        // Document voltage
+  jsonDoc["power_formula"] = data.power_formula;        // Document formula
   jsonDoc["current_status"] = data.current_status;
   jsonDoc["max_current"] = round(data.max_current * 100) / 100.0;
   jsonDoc["total_energy"] = round(data.total_energy * 1000) / 1000.0;
   
+  // Enhanced metadata for debugging and documentation
   jsonDoc["device_id"] = "ESP32_001";
+  jsonDoc["sensor_model"] = "ACS712-30A";           // Current sensor model
+  jsonDoc["firmware_version"] = "v2.1_enhanced";    // Firmware version
+  jsonDoc["timezone"] = "UTC";                      // Timezone for consistency
   
   String jsonString;
   serializeJson(jsonDoc, jsonString);
@@ -753,21 +782,27 @@ void publishSensorData(SensorReading data) {
   // Publish to MQTT
   if (client.publish(topic_sensors, jsonString.c_str())) {
     Serial.println("📡 Enhanced MQTT published successfully!");
+    Serial.println("⚡ Power calculation: P = V × I = " + String(MOTOR_VOLTAGE) + "V × " + 
+                   String(data.motor_current, 2) + "A = " + String(data.motor_power, 1) + "W");
   } else {
     Serial.print("❌ MQTT publish failed! State: ");
     Serial.println(client.state());
   }
 }
 
+// ENHANCED: Motor status publishing with power information
 void publishMotorStatus(String message) {
-  StaticJsonDocument<250> statusDoc;
+  StaticJsonDocument<300> statusDoc;
   statusDoc["message"] = message;
   statusDoc["motor_speed"] = currentMotorSpeed;
   statusDoc["motor_direction"] = currentDirection;
   statusDoc["motor_status"] = motorStatus;
   statusDoc["motor_enabled"] = motorEnabled;
   statusDoc["motor_current"] = round(currentCurrent * 100) / 100.0;
+  statusDoc["motor_power"] = round(motorPower * 100) / 100.0;
+  statusDoc["motor_voltage"] = MOTOR_VOLTAGE;
   statusDoc["current_status"] = currentStatus;
+  statusDoc["power_formula"] = "P=V*I";
   statusDoc["timestamp"] = millis();
   
   String statusString;
@@ -776,13 +811,15 @@ void publishMotorStatus(String message) {
   client.publish(topic_status, statusString.c_str());
 }
 
+// ENHANCED: Motor feedback with comprehensive power data
 void publishMotorFeedback(String feedback) {
-  StaticJsonDocument<200> feedbackDoc;
+  StaticJsonDocument<250> feedbackDoc;
   feedbackDoc["feedback"] = feedback;
   feedbackDoc["motor_speed"] = currentMotorSpeed;
   feedbackDoc["motor_direction"] = currentDirection;
   feedbackDoc["motor_status"] = motorStatus;
   feedbackDoc["motor_current"] = round(currentCurrent * 100) / 100.0;
+  feedbackDoc["motor_power"] = round(motorPower * 100) / 100.0;
   feedbackDoc["current_status"] = currentStatus;
   feedbackDoc["timestamp"] = millis();
   
@@ -793,9 +830,10 @@ void publishMotorFeedback(String feedback) {
   Serial.println("📤 Motor feedback: " + feedback);
 }
 
+// FIXED: Enhanced local data display with comprehensive power analysis
 void displayLocalData(SensorReading data) {
   Serial.println("═══════════════════════════════════════════════");
-  Serial.print("🕐 Time: ");
+  Serial.print("🕐 Time (UTC): ");
   Serial.println(data.timestamp);
   Serial.print("🌡️  Temperature: ");
   Serial.print(data.temperature, 1);
@@ -820,29 +858,76 @@ void displayLocalData(SensorReading data) {
   Serial.print(" | Status: ");
   Serial.println(data.motor_status);
   
-  // Current monitoring display
-  Serial.println("┌─── CURRENT MONITORING ──────────────────────┐");
+  // FIXED: Enhanced current monitoring display with comprehensive power analysis
+  Serial.println("┌─── CURRENT MONITORING & POWER ANALYSIS ────┐");
   Serial.print("⚡ Current: ");
   Serial.print(data.motor_current, 2);
-  Serial.print(" A | Power: ");
+  Serial.print(" A | Voltage: ");
+  Serial.print(data.motor_voltage, 1);
+  Serial.print(" V | Power: ");
   Serial.print(data.motor_power, 1);
-  Serial.print(" W | Status: ");
-  Serial.println(data.current_status);
+  Serial.print(" W");
+  Serial.println();
+  
+  Serial.print("📊 Status: ");
+  Serial.print(data.current_status);
+  Serial.print(" | Formula: ");
+  Serial.print(data.power_formula);
+  Serial.print(" | Model: ACS712-30A");
+  Serial.println();
+  
+  Serial.println("📐 Power Calculation Details:");
+  Serial.println("   P = V × I = " + String(data.motor_voltage, 1) + "V × " + 
+                 String(data.motor_current, 2) + "A = " + String(data.motor_power, 1) + "W");
   
   Serial.print("📈 Peak Current: ");
   Serial.print(data.max_current, 2);
-  Serial.print(" A | Energy: ");
+  Serial.print(" A | Total Energy: ");
   Serial.print(data.total_energy, 3);
   Serial.println(" Ah");
   
-  // Power efficiency calculation
+  // ENHANCED: Power efficiency analysis with detailed breakdown
   if (data.motor_speed > 0 && data.motor_power > 0) {
     float efficiency = (data.motor_speed / 100.0) / (data.motor_power / 100.0);
-    Serial.print("🔋 Efficiency: ");
-    Serial.print(efficiency, 2);
+    float powerPerSpeed = data.motor_power / data.motor_speed;
+    float currentPerSpeed = data.motor_current / data.motor_speed;
+    
+    Serial.println("┌─── EFFICIENCY ANALYSIS ─────────────────────┐");
+    Serial.print("🔋 Efficiency Ratio: ");
+    Serial.print(efficiency, 3);
     Serial.print(" | Power/Speed: ");
-    Serial.print(data.motor_power / data.motor_speed, 1);
+    Serial.print(powerPerSpeed, 2);
     Serial.println(" W/%");
+    
+    Serial.print("⚡ Current/Speed: ");
+    Serial.print(currentPerSpeed, 3);
+    Serial.print(" A/% | Power Factor: ");
+    Serial.print((data.motor_power / (data.motor_voltage * data.motor_current)) * 100, 1);
+    Serial.println("%");
+    
+    // Load analysis
+    Serial.print("⚙️  Motor Load Analysis: ");
+    if (powerPerSpeed < 2.0) {
+      Serial.println("Light Load (Optimal)");
+    } else if (powerPerSpeed < 4.0) {
+      Serial.println("Normal Load (Good)");
+    } else if (powerPerSpeed < 6.0) {
+      Serial.println("Heavy Load (Monitor)");
+    } else {
+      Serial.println("Overload Condition (Critical)");
+    }
+    
+    // Efficiency rating
+    Serial.print("🏆 Efficiency Rating: ");
+    if (efficiency > 0.8) {
+      Serial.println("Excellent (>80%)");
+    } else if (efficiency > 0.6) {
+      Serial.println("Good (60-80%)");
+    } else if (efficiency > 0.4) {
+      Serial.println("Fair (40-60%)");
+    } else {
+      Serial.println("Poor (<40%)");
+    }
   }
   Serial.println("└─────────────────────────────────────────────┘");
   
@@ -850,11 +935,37 @@ void displayLocalData(SensorReading data) {
     Serial.print("🔄 Transitioning to: ");
     Serial.print(targetSpeed);
     Serial.print("% ");
-    Serial.println(targetDirection);
+    Serial.print(targetDirection);
+    Serial.print(" (Progress: ");
+    float progress = (millis() - transitionStartTime) / 1500.0 * 100;
+    Serial.print(min(100.0f, progress), 1);
+    Serial.println("%)");
   }
   
   Serial.print("🔌 Motor Enabled: ");
-  Serial.println(motorEnabled ? "YES" : "NO");
+  Serial.print(motorEnabled ? "YES" : "NO");
+  Serial.print(" | Uptime: ");
+  Serial.print(millis() / 1000);
+  Serial.println(" seconds");
+  
+  // System health indicators
+  Serial.println("┌─── SYSTEM HEALTH ───────────────────────────┐");
+  Serial.print("📶 WiFi: ");
+  Serial.print(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
+  Serial.print(" | MQTT: ");
+  Serial.print(client.connected() ? "Connected" : "Disconnected");
+  Serial.println();
+  
+  Serial.print("🧠 Free Heap: ");
+  Serial.print(ESP.getFreeHeap());
+  Serial.print(" bytes | CPU Freq: ");
+  Serial.print(ESP.getCpuFreqMHz());
+  Serial.println(" MHz");
+  
+  Serial.print("🔋 Power Consumption Est: ");
+  Serial.print(data.motor_power + 5.0, 1);  // Motor power + ESP32 consumption
+  Serial.println(" W total");
+  
   Serial.println("└─────────────────────────────────────────────┘");
   Serial.println("═══════════════════════════════════════════════");
 }

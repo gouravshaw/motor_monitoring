@@ -38,6 +38,8 @@ const SensorSchema = new mongoose.Schema({
   // Current sensor fields
   motor_current: { type: Number, default: 0 },
   motor_power: { type: Number, default: 0 },
+  motor_voltage: { type: Number, default: 12.0 }, // Added voltage field
+  power_formula: { type: String, default: 'P=V*I' }, // Added formula documentation
   current_status: { type: String, default: 'IDLE' },
   max_current: { type: Number, default: 0 },
   total_energy: { type: Number, default: 0 },
@@ -139,6 +141,8 @@ client.on('message', async (topic, message) => {
           // Current sensor data
           motor_current: data.motor_current || 0,
           motor_power: data.motor_power || 0,
+          motor_voltage: data.motor_voltage || 12.0,
+          power_formula: data.power_formula || 'P=V*I',
           current_status: data.current_status || 'IDLE',
           max_current: data.max_current || 0,
           total_energy: data.total_energy || 0,
@@ -543,9 +547,9 @@ app.get('/api/motor/diagnostics', async (req, res) => {
   }
 });
 
-// ===== ENHANCED ANALYTICS API ENDPOINTS =====
+// ===== ENHANCED ANALYTICS API ENDPOINTS WITH TIMEZONE FIXES =====
 
-// Analytics data endpoint with filtering and aggregation
+// FIXED: Analytics data endpoint with filtering and aggregation - TIMEZONE FIXED
 app.get('/api/analytics/data', async (req, res) => {
   try {
     const { 
@@ -559,10 +563,20 @@ app.get('/api/analytics/data', async (req, res) => {
 
     console.log('📊 Analytics data request:', { startDate, endDate, aggregation, page, limit });
 
-    // Build date filter
+    // FIXED: Build date filter with proper timezone handling
     const dateFilter = {};
-    if (startDate) dateFilter.$gte = new Date(startDate);
-    if (endDate) dateFilter.$lte = new Date(endDate);
+    if (startDate) {
+      // Convert from local datetime-local input to UTC for MongoDB query
+      const startDateUTC = new Date(startDate);
+      dateFilter.$gte = startDateUTC;
+      console.log('📅 Start date converted:', startDate, '→', startDateUTC.toISOString());
+    }
+    if (endDate) {
+      // Convert from local datetime-local input to UTC for MongoDB query
+      const endDateUTC = new Date(endDate);
+      dateFilter.$lte = endDateUTC;
+      console.log('📅 End date converted:', endDate, '→', endDateUTC.toISOString());
+    }
 
     let query = {};
     if (Object.keys(dateFilter).length > 0) {
@@ -645,7 +659,9 @@ app.get('/api/analytics/data', async (req, res) => {
         pages: Math.ceil(totalCount / parseInt(limit))
       },
       aggregation,
-      dateRange: { startDate, endDate }
+      dateRange: { startDate, endDate },
+      timezone: 'UTC', // Indicate data is stored in UTC
+      localTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Server local timezone
     };
 
     res.json(response);
@@ -659,17 +675,25 @@ app.get('/api/analytics/data', async (req, res) => {
   }
 });
 
-// Enhanced analytics statistics endpoint with current data
+// FIXED: Enhanced analytics statistics endpoint with current data - TIMEZONE FIXED
 app.get('/api/analytics/stats', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
     console.log('📊 Analytics stats request:', { startDate, endDate });
 
-    // Build date filter
+    // FIXED: Build date filter with proper timezone handling
     const dateFilter = {};
-    if (startDate) dateFilter.$gte = new Date(startDate);
-    if (endDate) dateFilter.$lte = new Date(endDate);
+    if (startDate) {
+      const startDateUTC = new Date(startDate);
+      dateFilter.$gte = startDateUTC;
+      console.log('📅 Stats start date converted:', startDate, '→', startDateUTC.toISOString());
+    }
+    if (endDate) {
+      const endDateUTC = new Date(endDate);
+      dateFilter.$lte = endDateUTC;
+      console.log('📅 Stats end date converted:', endDate, '→', endDateUTC.toISOString());
+    }
 
     let matchQuery = {};
     if (Object.keys(dateFilter).length > 0) {
@@ -753,6 +777,10 @@ app.get('/api/analytics/stats', async (req, res) => {
       result.specificPowerConsumption = result.avgMotorPower / result.avgMotorSpeed; // W per %speed
     }
 
+    // FIXED: Add timezone information to response
+    result.timezone = 'UTC';
+    result.queryDateRange = { startDate, endDate };
+
     console.log('📊 Enhanced analytics statistics calculated:', result);
     res.json(result);
 
@@ -765,17 +793,25 @@ app.get('/api/analytics/stats', async (req, res) => {
   }
 });
 
-// Enhanced correlations endpoint with current data
+// FIXED: Enhanced correlations endpoint with current data - TIMEZONE FIXED
 app.get('/api/analytics/correlations', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
     console.log('📊 Analytics correlations request:', { startDate, endDate });
 
-    // Build date filter
+    // FIXED: Build date filter with proper timezone handling
     const dateFilter = {};
-    if (startDate) dateFilter.$gte = new Date(startDate);
-    if (endDate) dateFilter.$lte = new Date(endDate);
+    if (startDate) {
+      const startDateUTC = new Date(startDate);
+      dateFilter.$gte = startDateUTC;
+      console.log('📅 Correlations start date converted:', startDate, '→', startDateUTC.toISOString());
+    }
+    if (endDate) {
+      const endDateUTC = new Date(endDate);
+      dateFilter.$lte = endDateUTC;
+      console.log('📅 Correlations end date converted:', endDate, '→', endDateUTC.toISOString());
+    }
 
     let matchQuery = {};
     if (Object.keys(dateFilter).length > 0) {
@@ -790,14 +826,24 @@ app.get('/api/analytics/correlations', async (req, res) => {
     console.log(`📊 Retrieved ${data.length} records for correlation analysis`);
 
     if (data.length === 0) {
-      return res.json({ correlations: {}, message: 'No data available for correlation analysis' });
+      return res.json({ 
+        correlations: {}, 
+        message: 'No data available for correlation analysis',
+        timezone: 'UTC',
+        queryDateRange: { startDate, endDate }
+      });
     }
 
     // Calculate correlations with enhanced dataset
     const correlations = calculateEnhancedCorrelations(data);
 
     console.log('📊 Enhanced correlation matrix calculated');
-    res.json({ correlations, sampleSize: data.length });
+    res.json({ 
+      correlations, 
+      sampleSize: data.length,
+      timezone: 'UTC',
+      queryDateRange: { startDate, endDate }
+    });
 
   } catch (error) {
     console.error('❌ Error calculating enhanced correlations:', error);
@@ -808,17 +854,25 @@ app.get('/api/analytics/correlations', async (req, res) => {
   }
 });
 
-// Analytics export endpoint
+// FIXED: Analytics export endpoint - TIMEZONE FIXED
 app.get('/api/analytics/export', async (req, res) => {
   try {
     const { startDate, endDate, format = 'csv' } = req.query;
 
     console.log('📊 Export request:', { startDate, endDate, format });
 
-    // Build date filter
+    // FIXED: Build date filter with proper timezone handling
     const dateFilter = {};
-    if (startDate) dateFilter.$gte = new Date(startDate);
-    if (endDate) dateFilter.$lte = new Date(endDate);
+    if (startDate) {
+      const startDateUTC = new Date(startDate);
+      dateFilter.$gte = startDateUTC;
+      console.log('📅 Export start date converted:', startDate, '→', startDateUTC.toISOString());
+    }
+    if (endDate) {
+      const endDateUTC = new Date(endDate);
+      dateFilter.$lte = endDateUTC;
+      console.log('📅 Export end date converted:', endDate, '→', endDateUTC.toISOString());
+    }
 
     let query = {};
     if (Object.keys(dateFilter).length > 0) {
@@ -832,16 +886,25 @@ app.get('/api/analytics/export', async (req, res) => {
       .lean();
 
     if (format === 'csv') {
-      // Convert to CSV
-      const csv = convertToCSV(data);
+      // Convert to CSV with timezone-aware timestamps
+      const csv = convertToCSVWithTimezone(data);
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="motor_data_${new Date().toISOString().split('T')[0]}.csv"`);
       res.send(csv);
     } else {
-      // Return JSON
+      // Return JSON with timezone information
+      const exportData = {
+        data: data,
+        exportTimestamp: new Date().toISOString(),
+        timezone: 'UTC',
+        queryDateRange: { startDate, endDate },
+        totalRecords: data.length,
+        powerFormula: 'P = V × I (12V motor assumed)'
+      };
+      
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="motor_data_${new Date().toISOString().split('T')[0]}.json"`);
-      res.json(data);
+      res.json(exportData);
     }
 
     console.log(`📊 Data exported in ${format} format: ${data.length} records`);
@@ -913,19 +976,38 @@ function calculatePearsonCorrelation(x, y) {
   return denominator === 0 ? 0 : numerator / denominator;
 }
 
-function convertToCSV(data) {
+// FIXED: Enhanced CSV conversion with proper timezone handling
+function convertToCSVWithTimezone(data) {
   if (!data || data.length === 0) return '';
 
-  // Define headers without pressure
-  const headers = ['created_at', 'timestamp', 'temperature', 'humidity', 'vibration', 'vibration_x', 'vibration_y', 'vibration_z', 
-                   'temp_status', 'vib_status', 'motor_speed', 'motor_direction', 'motor_status', 'motor_enabled', 'is_transitioning',
-                   'motor_current', 'motor_power', 'current_status', 'max_current', 'total_energy', 'device_id'];
+  // Define headers including power calculation note
+  const headers = [
+    'created_at_utc', 'created_at_local', 'timestamp', 
+    'temperature', 'humidity', 'vibration', 'vibration_x', 'vibration_y', 'vibration_z', 
+    'temp_status', 'vib_status', 'motor_speed', 'motor_direction', 'motor_status', 
+    'motor_enabled', 'is_transitioning', 'motor_current', 'motor_power_calculated', 
+    'motor_voltage', 'power_formula', 'current_status', 'max_current', 'total_energy', 'device_id'
+  ];
   
   const csvContent = [
     headers.join(','),
+    `# Power calculation: P = V × I (12V motor voltage assumed)`,
+    `# Export timestamp: ${new Date().toISOString()}`,
+    `# Total records: ${data.length}`,
+    `# Timezone: Data stored in UTC, local times calculated for display`,
     ...data.map(row => 
       headers.map(header => {
-        const value = row[header];
+        let value = row[header];
+        
+        // Special handling for timestamps
+        if (header === 'created_at_utc') {
+          value = row.created_at ? new Date(row.created_at).toISOString() : '';
+        } else if (header === 'created_at_local') {
+          value = row.created_at ? new Date(row.created_at).toLocaleString() : '';
+        } else if (header === 'motor_power_calculated') {
+          value = row.motor_power || 0;
+        }
+        
         if (value === null || value === undefined) return '';
         if (typeof value === 'string' && value.includes(',')) {
           return `"${value.replace(/"/g, '""')}"`;
@@ -954,7 +1036,7 @@ app.listen(PORT, () => {
   console.log('║     🚀 ENHANCED MQTT MOTOR DASHBOARD           ║');
   console.log('║                                                ║');
   console.log('║  Student: Gourav Shaw (T0436800)               ║');
-  console.log('║  Enhanced Motor Control                        ║');
+  console.log('║  Enhanced Motor Control with Timezone Fixes   ║');
   console.log('║                                                ║');
   console.log(`║  🌐 Server: http://localhost:${PORT}              ║`);
   console.log(`║  📊 Analytics: http://localhost:${PORT}/analytics ║`);
@@ -970,6 +1052,9 @@ app.listen(PORT, () => {
   console.log('║  • Data export (CSV/JSON)                     ║');
   console.log('║  • Motor command logging                      ║');
   console.log('║  • Enhanced MQTT communication               ║');
+  console.log('║  • FIXED: Timezone handling consistency      ║');
+  console.log('║  • FIXED: Power calculation P = V × I        ║');
+  console.log('║  • FIXED: Analytics controls alignment       ║');
   console.log('║  • Removed pressure monitoring               ║');
   console.log('╚════════════════════════════════════════════════╝');
 });

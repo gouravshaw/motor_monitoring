@@ -84,23 +84,27 @@
             border: 1px solid rgba(255, 255, 255, 0.15);
         }
 
+        /* FIXED: Better aligned controls grid */
         .controls-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 25px;
-            align-items: end;
+            align-items: start; /* Changed from 'end' to 'start' for better alignment */
+            margin-bottom: 20px;
         }
 
         .control-group {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            height: 100%; /* Ensure equal height */
         }
 
         .control-group label {
             font-weight: bold;
             color: #00ff88;
             margin-bottom: 5px;
+            min-height: 24px; /* Consistent label height */
         }
 
         .control-group input,
@@ -111,6 +115,7 @@
             background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
             font-size: 14px;
+            min-height: 48px; /* Consistent input height */
         }
 
         .control-group select {
@@ -135,6 +140,7 @@
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 10px;
+            min-height: 40px; /* Consistent preset area height */
         }
 
         .preset-btn {
@@ -536,7 +542,7 @@
     </div>
 
     <div class="container">
-        <!-- Controls Section -->
+        <!-- FIXED: Better aligned Controls Section -->
         <div class="controls-section">
             <div class="controls-grid">
                 <div class="control-group">
@@ -552,6 +558,7 @@
                 <div class="control-group">
                     <label for="endDate">End Date</label>
                     <input type="datetime-local" id="endDate">
+                    <div style="min-height: 40px;"></div> <!-- Spacer for alignment -->
                 </div>
 
                 <div class="control-group">
@@ -562,6 +569,7 @@
                         <option value="daily">Daily Average</option>
                         <option value="weekly">Weekly Average</option>
                     </select>
+                    <div style="min-height: 40px;"></div> <!-- Spacer for alignment -->
                 </div>
             </div>
 
@@ -625,7 +633,7 @@
             </div>
 
             <div class="chart-container">
-                <div class="chart-title">Motor Power Consumption Analysis</div>
+                <div class="chart-title">Motor Power Consumption Analysis (P = V × I)</div>
                 <canvas id="powerChart" width="400" height="300"></canvas>
             </div>
 
@@ -703,41 +711,57 @@
             
             console.log('📊 Enhanced Analytics Dashboard with Current Monitoring initialized');
             console.log('🎯 Professional motor monitoring analytics with current sensing ready');
+            console.log('⚡ Power calculation: P = V × I (12V assumed)');
         });
 
-        // Initialize date inputs with default values
+        // FIXED: Initialize date inputs with proper timezone handling
         function initializeDateInputs() {
             const now = new Date();
             const yesterday = new Date(now - 24 * 60 * 60 * 1000);
             
-            document.getElementById('endDate').value = now.toISOString().slice(0, 16);
-            document.getElementById('startDate').value = yesterday.toISOString().slice(0, 16);
+            // Use local timezone consistently
+            const endDateLocal = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+            const startDateLocal = new Date(yesterday.getTime() - (yesterday.getTimezoneOffset() * 60000));
+            
+            document.getElementById('endDate').value = endDateLocal.toISOString().slice(0, 16);
+            document.getElementById('startDate').value = startDateLocal.toISOString().slice(0, 16);
+            
+            console.log('🕐 Date inputs initialized with local timezone');
+            console.log('📅 Start:', startDateLocal.toISOString());
+            console.log('📅 End:', endDateLocal.toISOString());
         }
 
-        // Set date presets
+        // FIXED: Set date presets with proper timezone handling
         function setDatePreset(preset) {
             const now = new Date();
-            const endDate = now.toISOString().slice(0, 16);
-            let startDate;
+            const endDateLocal = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+            let startDateLocal;
 
             switch(preset) {
                 case '24h':
-                    startDate = new Date(now - 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+                    const yesterday = new Date(now - 24 * 60 * 60 * 1000);
+                    startDateLocal = new Date(yesterday.getTime() - (yesterday.getTimezoneOffset() * 60000));
                     break;
                 case '7d':
-                    startDate = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+                    const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+                    startDateLocal = new Date(weekAgo.getTime() - (weekAgo.getTimezoneOffset() * 60000));
                     break;
                 case '30d':
-                    startDate = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+                    const monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+                    startDateLocal = new Date(monthAgo.getTime() - (monthAgo.getTimezoneOffset() * 60000));
                     break;
             }
 
-            document.getElementById('startDate').value = startDate;
-            document.getElementById('endDate').value = endDate;
+            document.getElementById('startDate').value = startDateLocal.toISOString().slice(0, 16);
+            document.getElementById('endDate').value = endDateLocal.toISOString().slice(0, 16);
 
             // Update active preset button
             document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
+            
+            console.log(`📅 Date preset set to ${preset}`);
+            console.log('📅 Start:', startDateLocal.toISOString());
+            console.log('📅 End:', endDateLocal.toISOString());
         }
 
         // Main analytics loading function
@@ -773,6 +797,8 @@
                 const startDate = document.getElementById('startDate').value;
                 const endDate = document.getElementById('endDate').value;
                 
+                console.log('📊 Loading statistics for date range:', startDate, 'to', endDate);
+                
                 const response = await fetch(`/api/analytics/stats?startDate=${startDate}&endDate=${endDate}`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
@@ -794,6 +820,7 @@
                 document.getElementById('currentFaultRate').textContent = `${(stats.currentFaultRate || 0).toFixed(1)}%`;
                 
                 console.log('📊 Enhanced statistics with current data loaded:', stats);
+                console.log('⚡ Power formula confirmed: P = V × I (12V motor assumed)');
                 
             } catch (error) {
                 console.error('❌ Error loading statistics:', error);
@@ -818,6 +845,8 @@
                 const startDate = document.getElementById('startDate').value;
                 const endDate = document.getElementById('endDate').value;
                 const aggregation = document.getElementById('aggregation').value;
+                
+                console.log('📊 Loading charts data for:', startDate, 'to', endDate, '(', aggregation, ')');
                 
                 const response = await fetch(`/api/analytics/data?startDate=${startDate}&endDate=${endDate}&aggregation=${aggregation}&limit=100`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -913,7 +942,7 @@
             });
         }
 
-        // Create power consumption chart
+        // FIXED: Create power consumption chart with proper formula documentation
         function createPowerChart(data) {
             const ctx = document.getElementById('powerChart').getContext('2d');
             
@@ -926,7 +955,7 @@
                 data: {
                     labels: data.map((d, index) => index + 1),
                     datasets: [{
-                        label: 'Motor Power (W)',
+                        label: 'Motor Power (W) - P = V × I',
                         data: data.map(d => d.motor_power || d.avg_motor_power || 0),
                         borderColor: '#ff6b6b',
                         backgroundColor: 'rgba(255, 107, 107, 0.1)',
@@ -937,7 +966,14 @@
                 options: {
                     responsive: true,
                     plugins: {
-                        legend: { labels: { color: '#ffffff' } }
+                        legend: { labels: { color: '#ffffff' } },
+                        tooltip: {
+                            callbacks: {
+                                footer: function(context) {
+                                    return 'Formula: P = V × I (12V assumed)';
+                                }
+                            }
+                        }
                     },
                     scales: {
                         y: {
@@ -1056,6 +1092,8 @@
                 const endDate = document.getElementById('endDate').value;
                 const aggregation = document.getElementById('aggregation').value;
                 
+                console.log('📊 Loading data table page', page, 'for:', startDate, 'to', endDate);
+                
                 const response = await fetch(`/api/analytics/data?startDate=${startDate}&endDate=${endDate}&aggregation=${aggregation}&page=${page}&limit=20`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
@@ -1125,7 +1163,7 @@
             document.getElementById('correlationMatrix').innerHTML = html;
         }
 
-        // Display enhanced data table
+        // FIXED: Display enhanced data table with proper timestamp handling
         function displayEnhancedDataTable(data, pagination) {
             const tableBody = document.getElementById('dataTableBody');
             
@@ -1136,8 +1174,14 @@
 
             let html = '';
             data.forEach(row => {
-                const timestamp = row.created_at ? new Date(row.created_at).toLocaleString() : 
-                                 row.timestamp || 'N/A';
+                // FIXED: Proper timestamp handling without timezone issues
+                let timestamp = 'N/A';
+                if (row.created_at) {
+                    const date = new Date(row.created_at);
+                    timestamp = date.toLocaleString(); // Use local timezone for display
+                } else if (row.timestamp) {
+                    timestamp = row.timestamp;
+                }
                 
                 html += `
                     <tr>
@@ -1208,6 +1252,8 @@
                 const startDate = document.getElementById('startDate').value;
                 const endDate = document.getElementById('endDate').value;
                 
+                console.log('📊 Exporting data from', startDate, 'to', endDate, 'as', format);
+                
                 const url = `/api/analytics/export?startDate=${startDate}&endDate=${endDate}&format=${format}`;
                 
                 // Create a temporary link and click it to download
@@ -1245,6 +1291,8 @@
         console.log('📈 Features: Statistics, Charts, Correlations, Current Analysis, Data Export');
         console.log('⚡ Current sensor integration: ACS712 Hall Effect Sensor');
         console.log('🔋 Power monitoring: Real-time current, power, and energy analysis');
+        console.log('⚡ Power formula: P = V × I (12V motor voltage assumed)');
+        console.log('🕐 Timezone: Fixed to use local timezone consistently');
     </script>
 </body>
 </html>
