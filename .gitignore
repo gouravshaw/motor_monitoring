@@ -1,0 +1,80 @@
+# Virtual environments - ALL Python environments
+**/venv/
+**/env/
+**/motor_industrial_env/
+**/motor_ml_env/
+**/motor_dataset_env/
+**/__pycache__/
+**/.Python
+**/pip-log.txt
+**/lib/
+**/lib64/
+**/include/
+**/bin/
+**/share/
+**/pyvenv.cfg
+
+# Large data files
+*.csv
+**/results/
+*.joblib
+*.pkl
+*.model
+*.h5
+*.hdf5
+
+# System libraries
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# ML/Data Science
+**/models/
+**/checkpoints/
+**/datasets/
+**/data/
+**/backup/
+
+# IDE & Editors
+**/.vscode/
+**/.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+**/logs/
+npm-debug.log*
+
+# Dependencies
+**/node_modules/
+**/package-lock.json
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# Java
+*.jar
+*.jar.*
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Large PDF files
+*.pdf
