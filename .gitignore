@@ -78,3 +78,17 @@ npm-debug.log*
 
 # Large PDF files
 *.pdf
+# Virtual environments
+ml_development/motor_industrial_env/
+ml_development/*/motor_*_env/
+**/venv/
+**/__pycache__/
+
+# Large files
+*.csv
+*.joblib
+*.so*
+**/results/
+
+# System files
+.DS_Store
